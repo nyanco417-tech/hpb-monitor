@@ -1,0 +1,42 @@
+name: HPB空き状況モニター
+
+on:
+  schedule:
+    # 毎日JST 8:00 = UTC 23:00（前日）
+    - cron: '0 23 * * *'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: チェックアウト
+        uses: actions/checkout@v4
+
+      - name: Node.js セットアップ
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: 依存関係インストール
+        run: npm ci
+
+      - name: Playwright ブラウザインストール
+        run: npx playwright install chromium --with-deps
+
+      - name: モニター実行
+        env:
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: node monitor.js
+
+      - name: データをコミット・プッシュ
+        run: |
+          git config user.name "HPB Monitor Bot"
+          git config user.email "bot@hpb-monitor"
+          git add data/
+          git diff --cached --quiet || git commit -m "📊 $(TZ=Asia/Tokyo date +%Y-%m-%d) のデータ"
+          git push

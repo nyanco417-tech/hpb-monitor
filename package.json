@@ -1,0 +1,15 @@
+{
+  "name": "hpb-monitor",
+  "version": "2.0.0",
+  "description": "HPB競合サロン空き状況モニター（GitHub Actions版）",
+  "main": "monitor.js",
+  "scripts": {
+    "monitor": "node monitor.js",
+    "test": "node monitor.js --dry-run"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "playwright": "^1.58.2",
+    "nodemailer": "^6.9.0"
+  }
+}
