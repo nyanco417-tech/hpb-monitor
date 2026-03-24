@@ -358,12 +358,15 @@ function generateDiffReport(outputDir, dateStr) {
       }
     }
 
-    report += `\n[空き枠サマリー]\n`;
+    report += `\n[週別サマリー（月曜始まり）]\n`;
+    report += `  期間          | 予約済 | 空き  | 合計  | 予約率\n`;
+    report += `  --------------|--------|-------|-------|-------\n`;
     const sortedWeeks = Object.entries(weeklyStats).sort((a, b) => a[1].sortKey - b[1].sortKey);
     for (const [weekLabel, stats] of sortedWeeks) {
       if (stats.total === 0) continue;
-      const pct = ((stats.available / stats.total) * 100).toFixed(1);
-      report += `  ${weekLabel}: 空き ${stats.available}/${stats.total}枠 (${pct}%)\n`;
+      const booked = stats.total - stats.available;
+      const bookedPct = ((booked / stats.total) * 100).toFixed(1);
+      report += `  ${weekLabel.padEnd(14)}| ${String(booked).padStart(4)}枠 | ${String(stats.available).padStart(3)}枠 | ${String(stats.total).padStart(3)}枠 | ${bookedPct}%\n`;
     }
 
     salonReport.filled = filled;
@@ -452,22 +455,24 @@ function generateHtmlReport(dateStr, salonReports) {
       html += `<p><strong>新規表示された日付</strong> <span class="count-badge gray">${salon.newDates.length}日</span></p>`;
     }
 
-    // 空き枠サマリー（バーチャート）
+    // 週別サマリー（予約数バーチャート）
     const sortedWeeks = Object.entries(salon.weeklyStats).sort((a, b) => a[1].sortKey - b[1].sortKey);
     if (sortedWeeks.length > 0) {
-      html += `<p><strong>週別 空き状況</strong></p>`;
-      html += `<table class="stat-table"><tr><th>期間</th><th>空き状況</th><th>空き率</th></tr>`;
+      html += `<p><strong>週別 予約状況</strong></p>`;
+      html += `<table class="stat-table"><tr><th>期間</th><th>予約状況</th><th>予約数</th><th>予約率</th></tr>`;
       for (const [weekLabel, stats] of sortedWeeks) {
         if (stats.total === 0) continue;
-        const pct = ((stats.available / stats.total) * 100).toFixed(1);
-        const pctNum = parseFloat(pct);
-        let barColor = '#d32f2f';
-        if (pctNum >= 60) barColor = '#388e3c';
-        else if (pctNum >= 30) barColor = '#f57c00';
-        else if (pctNum >= 10) barColor = '#fbc02d';
+        const booked = stats.total - stats.available;
+        const bookedPct = ((booked / stats.total) * 100).toFixed(1);
+        const pctNum = parseFloat(bookedPct);
+        let barColor = '#388e3c';
+        if (pctNum >= 90) barColor = '#d32f2f';
+        else if (pctNum >= 70) barColor = '#f57c00';
+        else if (pctNum >= 50) barColor = '#fbc02d';
         html += `<tr class="stat-row"><td style="white-space:nowrap;">${weekLabel}</td>`;
-        html += `<td><div class="bar-container"><div class="bar-fill" style="width:${pct}%;background:${barColor};"></div><div class="bar-label">${stats.available}/${stats.total}</div></div></td>`;
-        html += `<td style="text-align:right;font-weight:bold;color:${barColor}">${pct}%</td></tr>`;
+        html += `<td><div class="bar-container"><div class="bar-fill" style="width:${bookedPct}%;background:${barColor};"></div><div class="bar-label">${booked}/${stats.total}</div></div></td>`;
+        html += `<td style="text-align:center;font-weight:bold;">${booked}枠</td>`;
+        html += `<td style="text-align:right;font-weight:bold;color:${barColor}">${bookedPct}%</td></tr>`;
       }
       html += `</table>`;
     }
