@@ -1,7 +1,7 @@
 /**
  * HPB競合サロン 空き状況モニター（GitHub Actions版）
  *
- * Full Moon / Flower Factories の予約カレンダーを
+ * Full Moon / Flower Factories / La.stella の予約カレンダーを
  * スクリーンショットで保存し、前日との差分を分析する
  * 結果をメールで通知する
  */
@@ -23,6 +23,12 @@ const SALONS = [
     label: 'Flower Factories',
     storeId: 'H000685940',
     couponId: 'CP00000009651621',
+  },
+  {
+    name: 'lastella',
+    label: 'La.stella',
+    storeId: 'H000715681',
+    couponId: 'CP00000010301268',
   },
 ];
 
@@ -54,6 +60,53 @@ function getPrevDateStr(dateStr) {
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
+}
+
+/**
+ * サロンページから口コミ件数と評価点を取得（JSON-LD構造化データから）
+ */
+async function scrapeReviewData(browser, salon) {
+  console.log(`\n--- ${salon.label} 口コミ取得 ---`);
+  const page = await browser.newPage();
+  try {
+    const salonUrl = `https://beauty.hotpepper.jp/kr/sln${salon.storeId}/`;
+    await page.goto(salonUrl, { waitUntil: 'networkidle', timeout: 30000 });
+
+    const reviewData = await page.evaluate(() => {
+      // JSON-LDから取得（最も安定）
+      const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+      for (const script of scripts) {
+        try {
+          const json = JSON.parse(script.textContent);
+          if (json.aggregateRating) {
+            return {
+              reviewCount: json.aggregateRating.reviewCount || 0,
+              rating: json.aggregateRating.ratingValue || 0,
+            };
+          }
+        } catch (e) {}
+      }
+      // フォールバック: HTMLから取得
+      const countEl = document.querySelector('.slnHeaderKuchikomiCount');
+      const ratingEl = document.querySelector('.slnHeaderKuchikomiPoint');
+      if (countEl) {
+        const match = countEl.textContent.match(/(\d+)/);
+        return {
+          reviewCount: match ? parseInt(match[1], 10) : 0,
+          rating: ratingEl ? parseFloat(ratingEl.textContent.trim()) : 0,
+        };
+      }
+      return { reviewCount: 0, rating: 0 };
+    });
+
+    console.log(`  ${salon.label}: 口コミ ${reviewData.reviewCount}件 / 評価 ${reviewData.rating}`);
+    return reviewData;
+  } catch (err) {
+    console.error(`  [ERROR] 口コミ取得失敗 ${salon.label}: ${err.message}`);
+    return { reviewCount: 0, rating: 0 };
+  } finally {
+    await page.close();
+  }
 }
 
 async function expandCalendarTable(page) {
@@ -376,11 +429,157 @@ function generateDiffReport(outputDir, dateStr) {
     salonReports.push(salonReport);
   }
 
+  // 口コミ増減セクション
+  report += generateReviewSection(outputDir, dateStr);
+
   fs.writeFileSync(path.join(outputDir, 'diff_report.txt'), report, 'utf-8');
   fs.writeFileSync(path.join(outputDir, 'diff_report.html'), generateHtmlReport(dateStr, salonReports), 'utf-8');
   console.log(`\n差分レポート保存: diff_report.txt / diff_report.html`);
   console.log(report);
   return { text: report, html: generateHtmlReport(dateStr, salonReports), hasPrev: true, salonReports };
+}
+
+/**
+ * 口コミ増減レポートセクション生成
+ * 今日のreviews.jsonと過去データを比較し、日次・週次の増減を出す
+ */
+function generateReviewSection(outputDir, dateStr) {
+  const todayReviewsFile = path.join(outputDir, 'reviews.json');
+  if (!fs.existsSync(todayReviewsFile)) return '';
+
+  const todayReviews = JSON.parse(fs.readFileSync(todayReviewsFile, 'utf-8'));
+  let section = `\n${'='.repeat(60)}\n`;
+  section += `■ 口コミ状況（${dateStr}）\n\n`;
+
+  // 今日の口コミ数一覧
+  section += `[本日の口コミ数]\n`;
+  for (const salon of SALONS) {
+    const r = todayReviews.salons[salon.name];
+    if (r) {
+      section += `  ${salon.label.padEnd(20)} ${r.reviewCount}件  (${r.rating}点)\n`;
+    }
+  }
+
+  // 前日との比較
+  const prevDateStr = getPrevDateStr(dateStr);
+  const prevReviewsFile = path.join(OUTPUT_BASE, prevDateStr, 'reviews.json');
+  if (fs.existsSync(prevReviewsFile)) {
+    const prevReviews = JSON.parse(fs.readFileSync(prevReviewsFile, 'utf-8'));
+    section += `\n[前日比（${prevDateStr}→${dateStr}）]\n`;
+    for (const salon of SALONS) {
+      const today = todayReviews.salons[salon.name];
+      const prev = prevReviews.salons[salon.name];
+      if (today && prev) {
+        const diff = today.reviewCount - prev.reviewCount;
+        const sign = diff > 0 ? '+' : '';
+        section += `  ${salon.label.padEnd(20)} ${prev.reviewCount}→${today.reviewCount}件 (${sign}${diff})\n`;
+      }
+    }
+  }
+
+  // 週ごとのサマリー（月曜始まり）: 過去のreviews.jsonを遡って集計
+  section += `\n[週別口コミ増減サマリー]\n`;
+  const weeklyReviews = collectWeeklyReviews();
+  if (weeklyReviews.length > 0) {
+    section += `  期間          |`;
+    for (const salon of SALONS) {
+      section += ` ${salon.label.substring(0, 10).padEnd(10)} |`;
+    }
+    section += `\n`;
+    section += `  --------------|`;
+    for (const salon of SALONS) {
+      section += `------------|`;
+    }
+    section += `\n`;
+    for (const week of weeklyReviews) {
+      section += `  ${week.label.padEnd(14)}|`;
+      for (const salon of SALONS) {
+        const data = week.salons[salon.name];
+        if (data) {
+          const sign = data.diff > 0 ? '+' : '';
+          section += ` ${(sign + data.diff + '件').padStart(10)} |`;
+        } else {
+          section += `        -   |`;
+        }
+      }
+      section += `\n`;
+    }
+  } else {
+    section += `  データ蓄積中です（1週間後から表示されます）\n`;
+  }
+
+  return section;
+}
+
+/**
+ * 過去のreviews.jsonから週ごとの口コミ増減を集計
+ */
+function collectWeeklyReviews() {
+  const dataDir = OUTPUT_BASE;
+  if (!fs.existsSync(dataDir)) return [];
+
+  // 日付ディレクトリを一覧取得
+  const dirs = fs.readdirSync(dataDir)
+    .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+    .sort();
+
+  // 各日のreviewCountを取得
+  const dailyData = {};
+  for (const dir of dirs) {
+    const reviewsFile = path.join(dataDir, dir, 'reviews.json');
+    if (!fs.existsSync(reviewsFile)) continue;
+    const data = JSON.parse(fs.readFileSync(reviewsFile, 'utf-8'));
+    dailyData[dir] = data.salons;
+  }
+
+  const dates = Object.keys(dailyData).sort();
+  if (dates.length < 2) return [];
+
+  // 週ごとにグループ化（月曜始まり）
+  const weeks = {};
+  for (const dateStr of dates) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const dayOfWeek = d.getDay();
+    const mondayOffset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(d);
+    monday.setDate(monday.getDate() + mondayOffset);
+    const sunday = new Date(monday);
+    sunday.setDate(sunday.getDate() + 6);
+    const weekKey = formatShortDate(monday) + '-' + formatShortDate(sunday);
+
+    if (!weeks[weekKey]) {
+      weeks[weekKey] = { sortKey: monday.getTime(), firstDate: null, lastDate: null };
+    }
+    if (!weeks[weekKey].firstDate || dateStr < weeks[weekKey].firstDate) {
+      weeks[weekKey].firstDate = dateStr;
+    }
+    if (!weeks[weekKey].lastDate || dateStr > weeks[weekKey].lastDate) {
+      weeks[weekKey].lastDate = dateStr;
+    }
+  }
+
+  // 週ごとの増減を計算
+  const result = [];
+  const sortedWeeks = Object.entries(weeks).sort((a, b) => a[1].sortKey - b[1].sortKey);
+  for (const [weekLabel, weekInfo] of sortedWeeks) {
+    const entry = { label: weekLabel, salons: {} };
+    const first = dailyData[weekInfo.firstDate];
+    const last = dailyData[weekInfo.lastDate];
+    if (!first || !last) continue;
+
+    for (const salon of SALONS) {
+      if (first[salon.name] && last[salon.name]) {
+        entry.salons[salon.name] = {
+          diff: last[salon.name].reviewCount - first[salon.name].reviewCount,
+          start: first[salon.name].reviewCount,
+          end: last[salon.name].reviewCount,
+        };
+      }
+    }
+    result.push(entry);
+  }
+
+  return result;
 }
 
 /**
@@ -480,8 +679,71 @@ function generateHtmlReport(dateStr, salonReports) {
     html += `</div>`;
   }
 
+  // 口コミセクション（HTML版）
+  html += generateHtmlReviewSection(dateStr);
+
   html += `<p style="color:#aaa;font-size:11px;margin-top:24px;text-align:center;">HPB空き状況モニター（自動送信）</p>`;
   html += `</div></body></html>`;
+  return html;
+}
+
+/**
+ * 口コミセクション（HTML版）
+ */
+function generateHtmlReviewSection(dateStr) {
+  const outputDir = path.join(OUTPUT_BASE, dateStr);
+  const todayReviewsFile = path.join(outputDir, 'reviews.json');
+  if (!fs.existsSync(todayReviewsFile)) return '';
+
+  const todayReviews = JSON.parse(fs.readFileSync(todayReviewsFile, 'utf-8'));
+  let html = `<div style="margin-top:32px;border-top:2px solid #e91e63;padding-top:16px;">`;
+  html += `<h3 style="color:#e91e63;">口コミ状況</h3>`;
+
+  // 今日の口コミ数
+  html += `<table><tr><th>サロン</th><th>口コミ数</th><th>評価</th><th>前日比</th></tr>`;
+  const prevDateStr = getPrevDateStr(dateStr);
+  const prevReviewsFile = path.join(OUTPUT_BASE, prevDateStr, 'reviews.json');
+  const prevReviews = fs.existsSync(prevReviewsFile) ? JSON.parse(fs.readFileSync(prevReviewsFile, 'utf-8')) : null;
+
+  for (const salon of SALONS) {
+    const r = todayReviews.salons[salon.name];
+    if (!r) continue;
+    let diffHtml = '-';
+    if (prevReviews && prevReviews.salons[salon.name]) {
+      const diff = r.reviewCount - prevReviews.salons[salon.name].reviewCount;
+      if (diff > 0) diffHtml = `<span style="color:#388e3c;font-weight:bold;">+${diff}</span>`;
+      else if (diff === 0) diffHtml = `<span style="color:#999;">±0</span>`;
+      else diffHtml = `<span style="color:#d32f2f;">${diff}</span>`;
+    }
+    html += `<tr><td>${salon.label}</td><td style="text-align:center;font-weight:bold;">${r.reviewCount}件</td><td style="text-align:center;">${r.rating}点</td><td style="text-align:center;">${diffHtml}</td></tr>`;
+  }
+  html += `</table>`;
+
+  // 週別増減
+  const weeklyReviews = collectWeeklyReviews();
+  if (weeklyReviews.length > 0) {
+    html += `<p><strong>週別 口コミ増減</strong></p>`;
+    html += `<table><tr><th>期間</th>`;
+    for (const salon of SALONS) html += `<th>${salon.label}</th>`;
+    html += `</tr>`;
+    for (const week of weeklyReviews) {
+      html += `<tr><td style="white-space:nowrap;">${week.label}</td>`;
+      for (const salon of SALONS) {
+        const data = week.salons[salon.name];
+        if (data) {
+          const color = data.diff > 0 ? '#388e3c' : data.diff === 0 ? '#999' : '#d32f2f';
+          const sign = data.diff > 0 ? '+' : '';
+          html += `<td style="text-align:center;color:${color};font-weight:bold;">${sign}${data.diff}件</td>`;
+        } else {
+          html += `<td style="text-align:center;color:#999;">-</td>`;
+        }
+      }
+      html += `</tr>`;
+    }
+    html += `</table>`;
+  }
+
+  html += `</div>`;
   return html;
 }
 
@@ -553,6 +815,21 @@ async function main() {
   } finally {
     await browser.close();
   }
+
+  // 口コミ取得（ブラウザ再起動）
+  const browser2 = await chromium.launch({ headless: true });
+  const reviews = {};
+  try {
+    for (let i = 0; i < SALONS.length; i++) {
+      if (i > 0) await sleep(2000);
+      reviews[SALONS[i].name] = await scrapeReviewData(browser2, SALONS[i]);
+    }
+  } finally {
+    await browser2.close();
+  }
+  const reviewsPath = path.join(outputDir, 'reviews.json');
+  fs.writeFileSync(reviewsPath, JSON.stringify({ date: dateStr, salons: reviews }, null, 2), 'utf-8');
+  console.log(`\n口コミデータ保存: reviews.json`);
 
   const { text, html, hasPrev } = generateDiffReport(outputDir, dateStr);
 
