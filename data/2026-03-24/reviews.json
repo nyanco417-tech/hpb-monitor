@@ -1,0 +1,17 @@
+{
+  "date": "2026-03-24",
+  "salons": {
+    "fullmoon": {
+      "reviewCount": 174,
+      "rating": 4.93
+    },
+    "flower": {
+      "reviewCount": 298,
+      "rating": 4.81
+    },
+    "lastella": {
+      "reviewCount": 167,
+      "rating": 4.96
+    }
+  }
+}
