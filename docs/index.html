@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HPB 空き状況ダッシュボード</title>
+<style>
+:root {
+  --pink: #e91e63;
+  --pink-light: #fce4ec;
+  --green: #388e3c;
+  --green-light: #e8f5e9;
+  --red: #d32f2f;
+  --orange: #f57c00;
+  --yellow: #fbc02d;
+  --gray: #888;
+  --bg: #f5f5f5;
+  --card: #fff;
+  --border: #e0e0e0;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', sans-serif; background: var(--bg); color: #333; }
+.header { background: linear-gradient(135deg, var(--pink), #c2185b); color: #fff; padding: 16px 24px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.header h1 { font-size: 18px; font-weight: 600; }
+.header-controls { display: flex; gap: 12px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.header select, .header button { padding: 6px 12px; border-radius: 6px; border: none; font-size: 14px; cursor: pointer; }
+.header select { background: rgba(255,255,255,.9); }
+.header button { background: rgba(255,255,255,.2); color: #fff; }
+.header button:hover { background: rgba(255,255,255,.35); }
+.header button.active { background: #fff; color: var(--pink); font-weight: bold; }
+.tabs { display: flex; gap: 4px; }
+.tab { padding: 6px 16px; border-radius: 6px 6px 0 0; background: rgba(255,255,255,.15); color: rgba(255,255,255,.8); cursor: pointer; font-size: 13px; border: none; }
+.tab.active { background: var(--bg); color: #333; font-weight: bold; }
+.container { max-width: 1200px; margin: 0 auto; padding: 16px; }
+.card { background: var(--card); border-radius: 10px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+.card h2 { font-size: 16px; color: var(--pink); margin-bottom: 12px; border-bottom: 2px solid var(--pink-light); padding-bottom: 6px; }
+.card h3 { font-size: 14px; margin: 12px 0 8px; }
+
+/* Calendar grid */
+.cal-grid { display: grid; gap: 1px; background: var(--border); border-radius: 6px; overflow: hidden; font-size: 12px; }
+.cal-header { background: #f0f0f0; padding: 6px 4px; text-align: center; font-weight: bold; font-size: 11px; }
+.cal-header.weekend { background: var(--pink-light); }
+.cal-cell { padding: 3px 2px; text-align: center; background: #fff; min-height: 24px; font-size: 11px; }
+.cal-time { background: #fafafa; font-weight: 500; text-align: right; padding-right: 6px; white-space: nowrap; }
+.status-available { background: var(--green-light); color: var(--green); font-weight: bold; }
+.status-few { background: #fff3e0; color: var(--orange); font-weight: bold; }
+.status-full { background: #ffebee; color: #ccc; }
+.status-closed { background: #f5f5f5; color: #ddd; }
+
+/* Summary table */
+.summary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.summary-table th { text-align: left; padding: 8px; border-bottom: 2px solid var(--border); font-size: 12px; color: var(--gray); }
+.summary-table td { padding: 6px 8px; border-bottom: 1px solid #f0f0f0; }
+.bar-bg { background: #eee; border-radius: 4px; height: 18px; position: relative; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; }
+.bar-label { position: absolute; right: 4px; top: 1px; font-size: 10px; color: #555; }
+
+/* Review cards */
+.review-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.review-card { flex: 1; min-width: 150px; background: #fafafa; border-radius: 8px; padding: 12px; text-align: center; }
+.review-card .count { font-size: 28px; font-weight: bold; color: var(--pink); }
+.review-card .rating { font-size: 14px; color: var(--orange); }
+.review-card .label { font-size: 12px; color: var(--gray); margin-top: 4px; }
+.review-card .diff { font-size: 13px; margin-top: 4px; }
+.diff-pos { color: var(--green); font-weight: bold; }
+.diff-neg { color: var(--red); font-weight: bold; }
+.diff-zero { color: var(--gray); }
+
+/* Diff report */
+.diff-frame { border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.diff-frame iframe { width: 100%; height: 500px; border: none; }
+
+/* Screenshots */
+.screenshot-grid { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; }
+.screenshot-grid img { max-height: 200px; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; }
+.screenshot-grid img:hover { box-shadow: 0 2px 8px rgba(0,0,0,.2); }
+
+/* Modal */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.8); z-index: 200; justify-content: center; align-items: center; }
+.modal-overlay.show { display: flex; }
+.modal-overlay img { max-width: 95%; max-height: 95%; }
+.modal-overlay .close { position: absolute; top: 16px; right: 24px; color: #fff; font-size: 32px; cursor: pointer; }
+
+/* Loading */
+.loading { text-align: center; padding: 40px; color: var(--gray); }
+.spinner { display: inline-block; width: 24px; height: 24px; border: 3px solid var(--pink-light); border-top-color: var(--pink); border-radius: 50%; animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* View toggle */
+.view-toggle { display: flex; gap: 4px; margin-left: auto; }
+
+/* Date nav */
+.date-nav { display: flex; align-items: center; gap: 8px; }
+.date-nav button { background: rgba(255,255,255,.2); border: none; color: #fff; font-size: 18px; cursor: pointer; padding: 4px 10px; border-radius: 4px; }
+.date-nav button:hover { background: rgba(255,255,255,.35); }
+.date-nav button:disabled { opacity: .3; cursor: default; }
+
+/* Responsive */
+@media (max-width: 600px) {
+  .container { padding: 8px; }
+  .card { padding: 12px; }
+  .review-row { flex-direction: column; }
+  .cal-cell, .cal-header, .cal-time { font-size: 10px; padding: 2px 1px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>HPB 空き状況ダッシュボード</h1>
+  <div class="header-controls">
+    <div class="date-nav">
+      <button id="prevDate" title="前日">&larr;</button>
+      <select id="dateSelect"></select>
+      <button id="nextDate" title="翌日">&rarr;</button>
+    </div>
+    <div class="tabs" id="salonTabs"></div>
+    <div class="view-toggle">
+      <button id="viewAll" class="active" onclick="setView('all')">全体</button>
+      <button id="viewCalendar" onclick="setView('calendar')">カレンダー</button>
+      <button id="viewReport" onclick="setView('report')">レポート</button>
+    </div>
+  </div>
+</div>
+
+<div class="container" id="content">
+  <div class="loading"><div class="spinner"></div><p style="margin-top:8px;">読み込み中...</p></div>
+</div>
+
+<!-- Image modal -->
+<div class="modal-overlay" id="modal" onclick="closeModal()">
+  <span class="close">&times;</span>
+  <img id="modalImg" src="" alt="">
+</div>
+
+<script>
+const BASE = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+  ? '../data'
+  : '../data';  // GitHub Pages: /hpb-monitor/data/
+const SALONS = [
+  { name: 'fullmoon', label: 'Full Moon' },
+  { name: 'flower', label: 'Flower Factories' },
+  { name: 'lastella', label: 'La.stella' },
+];
+const DAY_NAMES = ['日', '月', '火', '水', '木', '金', '土'];
+
+let dates = [];
+let currentDate = '';
+let currentSalon = 'all';
+let currentView = 'all';
+let cache = {};
+
+// --- Init ---
+async function init() {
+  try {
+    const res = await fetch(`${BASE}/index.json`);
+    const data = await res.json();
+    dates = data.dates.sort().reverse(); // newest first
+  } catch (e) {
+    document.getElementById('content').innerHTML = '<div class="card"><p>データの読み込みに失敗しました。</p></div>';
+    return;
+  }
+
+  const sel = document.getElementById('dateSelect');
+  for (const d of dates) {
+    const opt = document.createElement('option');
+    opt.value = d;
+    const dt = new Date(d + 'T00:00:00');
+    opt.textContent = `${d} (${DAY_NAMES[dt.getDay()]})`;
+    sel.appendChild(opt);
+  }
+  sel.addEventListener('change', () => loadDate(sel.value));
+
+  // Salon tabs
+  const tabsEl = document.getElementById('salonTabs');
+  const allTab = mkTab('all', '全サロン');
+  allTab.classList.add('active');
+  tabsEl.appendChild(allTab);
+  for (const s of SALONS) {
+    tabsEl.appendChild(mkTab(s.name, s.label));
+  }
+
+  // Nav buttons
+  document.getElementById('prevDate').addEventListener('click', () => navDate(1));
+  document.getElementById('nextDate').addEventListener('click', () => navDate(-1));
+
+  loadDate(dates[0]);
+}
+
+function mkTab(id, label) {
+  const btn = document.createElement('button');
+  btn.className = 'tab';
+  btn.textContent = label;
+  btn.dataset.salon = id;
+  btn.addEventListener('click', () => {
+    currentSalon = id;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    render();
+  });
+  return btn;
+}
+
+function navDate(offset) {
+  const idx = dates.indexOf(currentDate);
+  const newIdx = idx + offset;
+  if (newIdx >= 0 && newIdx < dates.length) {
+    document.getElementById('dateSelect').value = dates[newIdx];
+    loadDate(dates[newIdx]);
+  }
+}
+
+function setView(v) {
+  currentView = v;
+  document.querySelectorAll('.view-toggle button').forEach(b => b.classList.remove('active'));
+  document.getElementById('view' + v.charAt(0).toUpperCase() + v.slice(1)).classList.add('active');
+  render();
+}
+
+// --- Data loading ---
+async function loadDate(dateStr) {
+  currentDate = dateStr;
+  const idx = dates.indexOf(dateStr);
+  document.getElementById('prevDate').disabled = idx >= dates.length - 1;
+  document.getElementById('nextDate').disabled = idx <= 0;
+
+  if (cache[dateStr]) { render(); return; }
+
+  document.getElementById('content').innerHTML = '<div class="loading"><div class="spinner"></div><p style="margin-top:8px;">読み込み中...</p></div>';
+
+  const entry = { salons: {}, reviews: null, diffHtml: null };
+
+  // Load salon data in parallel
+  const promises = SALONS.map(async s => {
+    try {
+      const res = await fetch(`${BASE}/${dateStr}/${s.name}_data.json`);
+      entry.salons[s.name] = await res.json();
+    } catch (e) { entry.salons[s.name] = null; }
+  });
+
+  // Load reviews
+  promises.push((async () => {
+    try {
+      const res = await fetch(`${BASE}/${dateStr}/reviews.json`);
+      entry.reviews = await res.json();
+    } catch (e) {}
+  })());
+
+  // Load diff report HTML
+  promises.push((async () => {
+    try {
+      const res = await fetch(`${BASE}/${dateStr}/diff_report.html`);
+      entry.diffHtml = await res.text();
+    } catch (e) {}
+  })());
+
+  // Load previous day reviews for comparison
+  const prevIdx = dates.indexOf(dateStr);
+  if (prevIdx < dates.length - 1) {
+    const prevDate = dates[prevIdx + 1];
+    promises.push((async () => {
+      try {
+        const res = await fetch(`${BASE}/${prevDate}/reviews.json`);
+        entry.prevReviews = await res.json();
+      } catch (e) {}
+    })());
+  }
+
+  await Promise.all(promises);
+  cache[dateStr] = entry;
+  render();
+}
+
+// --- Rendering ---
+function render() {
+  const entry = cache[currentDate];
+  if (!entry) return;
+
+  let html = '';
+
+  const salonsToShow = currentSalon === 'all' ? SALONS : SALONS.filter(s => s.name === currentSalon);
+
+  // Reviews section (show in all and report views)
+  if (currentView !== 'calendar' && entry.reviews) {
+    html += renderReviews(entry);
+  }
+
+  // Calendar section
+  if (currentView !== 'report') {
+    for (const s of salonsToShow) {
+      const data = entry.salons[s.name];
+      if (!data) continue;
+      html += renderCalendar(s, data);
+      html += renderWeeklySummary(s, data);
+    }
+  }
+
+  // Screenshots
+  if (currentView !== 'report') {
+    for (const s of salonsToShow) {
+      html += renderScreenshots(s);
+    }
+  }
+
+  // Diff report
+  if (currentView !== 'calendar' && entry.diffHtml) {
+    html += renderDiffReport(entry.diffHtml);
+  }
+
+  if (!html) html = '<div class="card"><p>データがありません。</p></div>';
+  document.getElementById('content').innerHTML = html;
+}
+
+function renderReviews(entry) {
+  let html = '<div class="card"><h2>口コミ状況</h2><div class="review-row">';
+  for (const s of SALONS) {
+    const r = entry.reviews.salons[s.name];
+    if (!r) continue;
+    let diffHtml = '';
+    if (entry.prevReviews && entry.prevReviews.salons[s.name]) {
+      const diff = r.reviewCount - entry.prevReviews.salons[s.name].reviewCount;
+      if (diff > 0) diffHtml = `<div class="diff diff-pos">+${diff}</div>`;
+      else if (diff === 0) diffHtml = `<div class="diff diff-zero">&plusmn;0</div>`;
+      else diffHtml = `<div class="diff diff-neg">${diff}</div>`;
+    }
+    html += `<div class="review-card">
+      <div class="label">${s.label}</div>
+      <div class="count">${r.reviewCount}</div>
+      <div class="rating">${'★'.repeat(Math.round(r.rating))} ${r.rating}</div>
+      ${diffHtml}
+    </div>`;
+  }
+  html += '</div></div>';
+  return html;
+}
+
+function renderCalendar(salon, data) {
+  const slots = data.slots;
+  const sortedDates = Object.keys(slots).sort();
+  if (sortedDates.length === 0) return '';
+
+  // Collect all times
+  const allTimes = new Set();
+  for (const d of sortedDates) {
+    for (const t of Object.keys(slots[d])) allTimes.add(t);
+  }
+  const times = [...allTimes].sort();
+
+  // Calculate columns (grid: 1 for time + N for dates)
+  const cols = sortedDates.length + 1;
+
+  let html = `<div class="card"><h2>${salon.label} - 空き状況カレンダー</h2>`;
+  html += `<div style="overflow-x:auto;">`;
+  html += `<div class="cal-grid" style="grid-template-columns: 50px repeat(${sortedDates.length}, minmax(40px, 1fr));">`;
+
+  // Header row
+  html += `<div class="cal-header"></div>`;
+  for (const d of sortedDates) {
+    const dt = new Date(d + 'T00:00:00');
+    const dow = dt.getDay();
+    const isWeekend = dow === 0 || dow === 6;
+    const dayLabel = `${dt.getMonth()+1}/${dt.getDate()}<br>${DAY_NAMES[dow]}`;
+    html += `<div class="cal-header${isWeekend ? ' weekend' : ''}">${dayLabel}</div>`;
+  }
+
+  // Time rows
+  for (const time of times) {
+    html += `<div class="cal-cell cal-time">${time}</div>`;
+    for (const d of sortedDates) {
+      const status = (slots[d] && slots[d][time]) || '-';
+      let cls = 'cal-cell ';
+      let display = status;
+      if (status === '◎' || status === '○') { cls += 'status-available'; display = '◎'; }
+      else if (status === '△') { cls += 'status-few'; }
+      else if (status === '×') { cls += 'status-full'; }
+      else { cls += 'status-closed'; display = '-'; }
+      html += `<div class="${cls}">${display}</div>`;
+    }
+  }
+
+  html += '</div></div></div>';
+  return html;
+}
+
+function renderWeeklySummary(salon, data) {
+  const slots = data.slots;
+  const weeks = {};
+
+  for (const [dateStr, timeSlots] of Object.entries(slots)) {
+    const d = new Date(dateStr + 'T00:00:00');
+    const dow = d.getDay();
+    const mondayOffset = dow === 0 ? -6 : 1 - dow;
+    const monday = new Date(d);
+    monday.setDate(monday.getDate() + mondayOffset);
+    const sunday = new Date(monday);
+    sunday.setDate(sunday.getDate() + 6);
+    const weekKey = fmtShort(monday) + '-' + fmtShort(sunday);
+    if (!weeks[weekKey]) weeks[weekKey] = { total: 0, available: 0, sortKey: monday.getTime() };
+
+    for (const [, status] of Object.entries(timeSlots)) {
+      if (status === '-') continue;
+      weeks[weekKey].total++;
+      if (status === '◎' || status === '○' || status === '△') weeks[weekKey].available++;
+    }
+  }
+
+  const sorted = Object.entries(weeks).sort((a, b) => a[1].sortKey - b[1].sortKey);
+  if (sorted.length === 0) return '';
+
+  let html = `<div class="card"><h2>${salon.label} - 週別予約率</h2>`;
+  html += `<table class="summary-table"><tr><th>期間</th><th>予約状況</th><th>予約率</th></tr>`;
+  for (const [label, stats] of sorted) {
+    if (stats.total === 0) continue;
+    const booked = stats.total - stats.available;
+    const pct = ((booked / stats.total) * 100).toFixed(1);
+    const pctNum = parseFloat(pct);
+    let color = 'var(--green)';
+    if (pctNum >= 90) color = 'var(--red)';
+    else if (pctNum >= 70) color = 'var(--orange)';
+    else if (pctNum >= 50) color = 'var(--yellow)';
+    html += `<tr>
+      <td style="white-space:nowrap">${label}</td>
+      <td><div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${color}"></div><div class="bar-label">${booked}/${stats.total}</div></div></td>
+      <td style="text-align:right;font-weight:bold;color:${color}">${pct}%</td>
+    </tr>`;
+  }
+  html += '</table></div>';
+  return html;
+}
+
+function renderScreenshots(salon) {
+  let html = `<div class="card"><h2>${salon.label} - スクリーンショット</h2>`;
+  html += `<div class="screenshot-grid">`;
+  for (let w = 0; w <= 5; w++) {
+    const src = `${BASE}/${currentDate}/${salon.name}_week${w}.png`;
+    html += `<img src="${src}" alt="week${w}" loading="lazy" onerror="this.style.display='none'" onclick="openModal(this.src)">`;
+  }
+  html += '</div></div>';
+  return html;
+}
+
+function renderDiffReport(diffHtml) {
+  let html = '<div class="card"><h2>差分レポート</h2>';
+  html += '<div class="diff-frame">';
+  html += `<iframe srcdoc="${escHtml(diffHtml)}"></iframe>`;
+  html += '</div></div>';
+  return html;
+}
+
+// --- Utils ---
+function fmtShort(d) {
+  return `${d.getMonth()+1}/${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function openModal(src) {
+  document.getElementById('modalImg').src = src;
+  document.getElementById('modal').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('show');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+init();
+</script>
+</body>
+</html>

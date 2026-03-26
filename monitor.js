@@ -836,7 +836,22 @@ async function main() {
   // メール送信
   await sendEmail(dateStr, text, html || '', outputDir);
 
+  // index.json 生成（GitHub Pages ダッシュボード用）
+  generateDateIndex();
+
   console.log(`\n完了！`);
+}
+
+/**
+ * data/index.json を生成（利用可能な日付一覧）
+ */
+function generateDateIndex() {
+  const dates = fs.readdirSync(OUTPUT_BASE)
+    .filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d))
+    .sort();
+  const indexPath = path.join(OUTPUT_BASE, 'index.json');
+  fs.writeFileSync(indexPath, JSON.stringify({ dates }, null, 2), 'utf-8');
+  console.log(`\nindex.json 生成: ${dates.length}日分`);
 }
 
 main().catch((err) => {
