@@ -66,14 +66,14 @@ function getPrevDateStr(dateStr) {
  * サロンページから口コミ件数と評価点を取得（JSON-LD構造化データから）
  */
 async function scrapeReviewData(browser, salon) {
-  console.log(`\n--- ${salon.label} 口コミ取得 ---`);
+  console.log(`\n--- ${salon.label} 口コミ・ブログ取得 ---`);
   const page = await browser.newPage();
   try {
+    // 1. サロンTOPからJSON-LDで口コミ数・評価を取得
     const salonUrl = `https://beauty.hotpepper.jp/kr/sln${salon.storeId}/`;
     await page.goto(salonUrl, { waitUntil: 'networkidle', timeout: 30000 });
 
     const reviewData = await page.evaluate(() => {
-      // JSON-LDから取得（最も安定）
       const scripts = document.querySelectorAll('script[type="application/ld+json"]');
       for (const script of scripts) {
         try {
@@ -86,7 +86,6 @@ async function scrapeReviewData(browser, salon) {
           }
         } catch (e) {}
       }
-      // フォールバック: HTMLから取得
       const countEl = document.querySelector('.slnHeaderKuchikomiCount');
       const ratingEl = document.querySelector('.slnHeaderKuchikomiPoint');
       if (countEl) {
@@ -98,12 +97,45 @@ async function scrapeReviewData(browser, salon) {
       }
       return { reviewCount: 0, rating: 0 };
     });
-
     console.log(`  ${salon.label}: 口コミ ${reviewData.reviewCount}件 / 評価 ${reviewData.rating}`);
+
+    // 2. 口コミ一覧から最新の投稿日を取得（最大20件）
+    await sleep(1000);
+    const reviewUrl = `https://beauty.hotpepper.jp/kr/sln${salon.storeId}/review/`;
+    await page.goto(reviewUrl, { waitUntil: 'networkidle', timeout: 30000 });
+
+    const recentReviews = await page.evaluate(() => {
+      const reviews = [];
+      // 投稿日パターン: [投稿日] YYYY-MM-DD HH:MM:SS.0
+      const allText = document.body.innerText;
+      const dateRegex = /\[投稿日\]\s*(\d{4}-\d{2}-\d{2})\s+\d{2}:\d{2}:\d{2}/g;
+      let match;
+      while ((match = dateRegex.exec(allText)) !== null) {
+        reviews.push({ postDate: match[1] });
+      }
+      return reviews.slice(0, 20);
+    });
+    reviewData.recentPostDates = recentReviews.map(r => r.postDate);
+    console.log(`  ${salon.label}: 最新投稿日 ${recentReviews.length}件取得`);
+
+    // 3. ブログ一覧からブログ総数を取得
+    await sleep(1000);
+    const blogUrl = `https://beauty.hotpepper.jp/kr/sln${salon.storeId}/blog/`;
+    await page.goto(blogUrl, { waitUntil: 'networkidle', timeout: 30000 });
+
+    const blogCount = await page.evaluate(() => {
+      const text = document.body.innerText;
+      // 「332件のブログがあります」パターン
+      const match = text.match(/(\d+)件のブログ/);
+      return match ? parseInt(match[1], 10) : 0;
+    });
+    reviewData.blogCount = blogCount;
+    console.log(`  ${salon.label}: ブログ ${blogCount}件`);
+
     return reviewData;
   } catch (err) {
-    console.error(`  [ERROR] 口コミ取得失敗 ${salon.label}: ${err.message}`);
-    return { reviewCount: 0, rating: 0 };
+    console.error(`  [ERROR] 口コミ・ブログ取得失敗 ${salon.label}: ${err.message}`);
+    return { reviewCount: 0, rating: 0, recentPostDates: [], blogCount: 0 };
   } finally {
     await page.close();
   }

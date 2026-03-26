@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HPB 空き状況ダッシュボード</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23e91e63'/><text y='.9em' x='50' text-anchor='middle' font-size='70'>📊</text></svg>">
 <style>
 :root {
   --pink: #e91e63; --pink-light: #fce4ec;
@@ -252,6 +253,9 @@ function render() {
     html += renderFillSpeed();
     html += renderWeekendPattern();
     html += renderTrendChart();
+    html += renderReviewPace();
+    html += renderBlogCount();
+    html += renderReviewTimeline(entry);
   }
 
   if (curView === 'all' || curView === 'calendar') {
@@ -593,6 +597,178 @@ function buildLineChart(dates, series, W, H, PAD, unit) {
   });
   svg += '</svg>';
   return svg;
+}
+
+// ----- Review pace comparison -----
+function renderReviewPace() {
+  var sortedDates = allDates.slice().reverse();
+  if (sortedDates.length < 2) return '';
+
+  // Calculate daily/weekly growth for each salon
+  var h = '<div class="card"><h2>口コミ増加ペース比較</h2>';
+  h += '<p style="font-size:11px;color:var(--gray);margin-bottom:8px">各サロンの口コミ増加速度。投稿日ベースで来店頻度を推定</p>';
+
+  // Build table: per salon, show total count, daily average, weekly average, monthly estimate
+  var firstDate = sortedDates[0];
+  var lastDate = sortedDates[sortedDates.length - 1];
+  var spanDays = daysBetween(firstDate, lastDate) || 1;
+
+  h += '<table class="stbl"><tr><th>サロン</th><th>現在の口コミ数</th><th>観測期間の増加</th><th>日平均</th><th>週ペース</th><th>月ペース(推定)</th><th>推定月間来客数</th></tr>';
+
+  SALONS.forEach(function(s) {
+    var firstRev = cache[firstDate] && cache[firstDate].reviews && cache[firstDate].reviews.salons && cache[firstDate].reviews.salons[s.name];
+    var lastRev = cache[lastDate] && cache[lastDate].reviews && cache[lastDate].reviews.salons && cache[lastDate].reviews.salons[s.name];
+    if (!firstRev || !lastRev) return;
+
+    // Use most recent and oldest data we have
+    var newestCount = 0, oldestCount = Infinity;
+    sortedDates.forEach(function(d) {
+      var rv = cache[d] && cache[d].reviews && cache[d].reviews.salons && cache[d].reviews.salons[s.name];
+      if (rv) {
+        if (rv.reviewCount > newestCount) newestCount = rv.reviewCount;
+        if (rv.reviewCount < oldestCount) oldestCount = rv.reviewCount;
+      }
+    });
+
+    var increase = newestCount - oldestCount;
+    var daily = (increase / spanDays).toFixed(2);
+    var weekly = (increase / spanDays * 7).toFixed(1);
+    var monthly = (increase / spanDays * 30).toFixed(0);
+    // Estimate: if ~20-30% of customers leave reviews
+    var estimatedCustomers = Math.round(parseFloat(monthly) / 0.25);
+
+    var color = parseFloat(monthly) >= 15 ? 'var(--red)' : parseFloat(monthly) >= 8 ? 'var(--orange)' : 'var(--green)';
+    h += '<tr>';
+    h += '<td style="font-weight:bold">' + s.label + '</td>';
+    h += '<td style="text-align:center">' + newestCount + '件</td>';
+    h += '<td style="text-align:center;font-weight:bold;color:' + color + '">+' + increase + '件/' + spanDays + '日</td>';
+    h += '<td style="text-align:center">' + daily + '件/日</td>';
+    h += '<td style="text-align:center;font-weight:bold">' + weekly + '件/週</td>';
+    h += '<td style="text-align:center;font-weight:bold;color:' + color + '">' + monthly + '件/月</td>';
+    h += '<td style="text-align:center;color:var(--gray)">\u2248' + estimatedCustomers + '人/月</td>';
+    h += '</tr>';
+  });
+  h += '</table>';
+  h += '<p style="font-size:10px;color:var(--gray);margin-top:4px">※推定来客数は口コミ投稿率25%と仮定した概算値です</p>';
+  h += '</div>';
+  return h;
+}
+
+// ----- Blog count comparison -----
+function renderBlogCount() {
+  // Show blog count for each salon across dates
+  var sortedDates = allDates.slice().reverse();
+
+  // Get latest blog counts
+  var hasAny = false;
+  var latestBlogs = {};
+  var blogSeries = {};
+  SALONS.forEach(function(s) { blogSeries[s.name] = []; });
+
+  sortedDates.forEach(function(d) {
+    SALONS.forEach(function(s) {
+      var rv = cache[d] && cache[d].reviews && cache[d].reviews.salons && cache[d].reviews.salons[s.name];
+      var bc = rv && rv.blogCount !== undefined ? rv.blogCount : null;
+      blogSeries[s.name].push(bc);
+      if (bc !== null && bc > 0) {
+        latestBlogs[s.name] = bc;
+        hasAny = true;
+      }
+    });
+  });
+
+  if (!hasAny) return '<div class="card"><h2>ブログ投稿数比較</h2><p style="color:var(--gray)">ブログ数データはまだ収集されていません（次回実行から取得開始）</p></div>';
+
+  var h = '<div class="card"><h2>ブログ投稿数比較</h2>';
+  h += '<p style="font-size:11px;color:var(--gray);margin-bottom:8px">HPBブログの投稿数。SEO・集客力の間接指標</p>';
+  h += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">';
+
+  // Find max for bar width calculation
+  var maxBlog = Math.max.apply(null, SALONS.map(function(s) { return latestBlogs[s.name] || 0; })) || 1;
+
+  SALONS.forEach(function(s) {
+    var count = latestBlogs[s.name] || 0;
+    var pct = (count / maxBlog * 100).toFixed(0);
+    var isMax = count === maxBlog && count > 0;
+    h += '<div class="rev-card" style="min-width:200px">';
+    h += '<div class="lbl">' + s.label + '</div>';
+    h += '<div class="cnt" style="color:' + (isMax ? 'var(--red)' : 'var(--pink)') + '">' + count + '</div>';
+    h += '<div class="lbl">ブログ記事</div>';
+    h += '<div class="bar-bg" style="margin-top:6px"><div class="bar-fill" style="width:' + pct + '%;background:' + s.color + '"></div></div>';
+    h += '</div>';
+  });
+  h += '</div>';
+
+  // Blog trend chart if we have multiple days of data
+  if (sortedDates.length >= 2) {
+    var hasBlogTrend = false;
+    SALONS.forEach(function(s) {
+      var nonNull = blogSeries[s.name].filter(function(v) { return v !== null; });
+      if (nonNull.length >= 2) hasBlogTrend = true;
+    });
+    if (hasBlogTrend) {
+      h += '<h3>ブログ数推移</h3>';
+      h += '<div style="overflow-x:auto">' + buildLineChart(sortedDates, blogSeries, 700, 180, 45, '件') + '</div>';
+      h += '<div style="display:flex;gap:16px;margin-top:4px;justify-content:center">';
+      SALONS.forEach(function(s) {
+        h += '<span style="font-size:11px"><span style="display:inline-block;width:10px;height:10px;background:' + s.color + ';border-radius:2px;vertical-align:middle;margin-right:3px"></span>' + s.label + '</span>';
+      });
+      h += '</div>';
+    }
+  }
+
+  h += '</div>';
+  return h;
+}
+
+// ----- Review timeline (recent post dates) -----
+function renderReviewTimeline(entry) {
+  if (!entry.reviews) return '';
+
+  var hasAny = false;
+  SALONS.forEach(function(s) {
+    var r = entry.reviews.salons && entry.reviews.salons[s.name];
+    if (r && r.recentPostDates && r.recentPostDates.length > 0) hasAny = true;
+  });
+
+  if (!hasAny) return '<div class="card"><h2>口コミ投稿タイムライン</h2><p style="color:var(--gray)">投稿日データはまだ収集されていません（次回実行から取得開始）</p></div>';
+
+  var h = '<div class="card"><h2>口コミ投稿タイムライン</h2>';
+  h += '<p style="font-size:11px;color:var(--gray);margin-bottom:8px">最新の口コミ投稿日。投稿間隔から来店頻度を推定</p>';
+
+  SALONS.forEach(function(s) {
+    var r = entry.reviews.salons && entry.reviews.salons[s.name];
+    if (!r || !r.recentPostDates || r.recentPostDates.length === 0) return;
+
+    var dates = r.recentPostDates.slice().sort().reverse();
+
+    h += '<h3>' + s.label + ' <span style="font-size:11px;color:var(--gray)">(直近' + dates.length + '件)</span></h3>';
+
+    // Calculate intervals between posts
+    var intervals = [];
+    for (var i = 0; i < dates.length - 1; i++) {
+      var gap = daysBetween(dates[i + 1], dates[i]);
+      intervals.push(gap);
+    }
+    var avgInterval = intervals.length > 0 ? (intervals.reduce(function(a, b) { return a + b; }, 0) / intervals.length).toFixed(1) : '-';
+
+    h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:6px 0">';
+    dates.forEach(function(d) {
+      var dt = new Date(d + 'T00:00:00');
+      var dayLabel = (dt.getMonth() + 1) + '/' + dt.getDate() + '(' + DAYS[dt.getDay()] + ')';
+      h += '<span style="background:#f0f0f0;padding:3px 8px;border-radius:12px;font-size:11px">' + dayLabel + '</span>';
+    });
+    h += '</div>';
+    h += '<p style="font-size:12px;margin-bottom:8px">投稿間隔: 平均 <strong>' + avgInterval + '日</strong>';
+    if (avgInterval !== '-') {
+      var postsPerWeek = (7 / parseFloat(avgInterval)).toFixed(1);
+      h += ' (\u2248 週' + postsPerWeek + '件ペース)';
+    }
+    h += '</p>';
+  });
+
+  h += '</div>';
+  return h;
 }
 
 // ----- Calendar -----
