@@ -267,10 +267,17 @@ async function processSalon(browser, salon, outputDir) {
       if (dataW) mergeSlots(mergedSlots, dataW.slots);
     }
 
-    const jsonData = { salon: salon.name, capturedAt: getDateStr(), slots: mergedSlots };
+    // データ健全性チェック
+    const integrity = validateSalonData(salon, mergedSlots, outputDir);
+    const jsonData = {
+      salon: salon.name,
+      capturedAt: getDateStr(),
+      slots: mergedSlots,
+      integrity,
+    };
     const jsonPath = path.join(outputDir, `${salon.name}_data.json`);
     fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2), 'utf-8');
-    console.log(`  データ保存: ${salon.name}_data.json (${Object.keys(mergedSlots).length}日分)`);
+    console.log(`  データ保存: ${salon.name}_data.json (${Object.keys(mergedSlots).length}日分, 健全性: ${integrity.status})`);
   } catch (err) {
     console.error(`  [ERROR] ${salon.label}: ${err.message}`);
     const errFile = path.join(outputDir, `${salon.name}_error.png`);
@@ -278,6 +285,56 @@ async function processSalon(browser, salon, outputDir) {
   } finally {
     await page.close();
   }
+}
+
+/**
+ * データ健全性チェック
+ * - 取得日付数が少なすぎないか
+ * - スロット数が異常に少なくないか
+ * - スクリーンショットが揃っているか
+ */
+function validateSalonData(salon, mergedSlots, outputDir) {
+  const dateCount = Object.keys(mergedSlots).length;
+  const totalSlots = Object.values(mergedSlots).reduce((sum, ts) => sum + Object.keys(ts).length, 0);
+  const warnings = [];
+
+  // 期待値: 6週間×7日=42日前後、各日30スロット前後
+  if (dateCount === 0) {
+    warnings.push('データが1日分も取得できていません');
+  } else if (dateCount < 14) {
+    warnings.push(`取得日数が少なすぎます (${dateCount}日, 通常35-42日)`);
+  }
+
+  if (dateCount > 0 && totalSlots / dateCount < 10) {
+    warnings.push(`1日あたりのスロット数が少なすぎます (平均${(totalSlots / dateCount).toFixed(0)}枠, 通常25-35枠)`);
+  }
+
+  // スクリーンショット照合: week0〜5の存在チェック
+  const missingScreenshots = [];
+  for (let w = 0; w <= WEEKS_TO_ADVANCE; w++) {
+    const ssPath = path.join(outputDir, `${salon.name}_week${w}.png`);
+    if (!fs.existsSync(ssPath)) {
+      missingScreenshots.push(`week${w}`);
+    }
+  }
+  if (missingScreenshots.length > 0) {
+    warnings.push(`スクリーンショット欠落: ${missingScreenshots.join(', ')}`);
+  }
+
+  // エラースクリーンショットの存在チェック
+  const errPath = path.join(outputDir, `${salon.name}_error.png`);
+  if (fs.existsSync(errPath)) {
+    warnings.push('エラースクリーンショットが存在します（スクレイプ中にエラー発生）');
+  }
+
+  const status = warnings.length === 0 ? 'ok' : 'warning';
+  if (warnings.length > 0) {
+    console.log(`  [健全性チェック] ${salon.label}: ${warnings.join(' / ')}`);
+  } else {
+    console.log(`  [健全性チェック] ${salon.label}: OK (${dateCount}日, ${totalSlots}スロット)`);
+  }
+
+  return { status, dateCount, totalSlots, warnings };
 }
 
 function mergeSlots(target, source) {
@@ -350,6 +407,33 @@ function generateDiffReport(outputDir, dateStr) {
     const todayData = JSON.parse(fs.readFileSync(todayFile, 'utf-8'));
     const prevData = JSON.parse(fs.readFileSync(prevFile, 'utf-8'));
 
+    // 前日or今日のデータが不完全な場合、差分比較をスキップ
+    const todayIntegrity = todayData.integrity;
+    const prevIntegrity = prevData.integrity;
+    let skipDiff = false;
+    if (prevIntegrity && prevIntegrity.status === 'warning') {
+      report += `  ⚠ 前日データに問題あり: ${prevIntegrity.warnings.join(' / ')}\n`;
+      report += `  → 差分比較の信頼性が低いため、変化検出を参考値として表示します\n`;
+      salonReport.unreliable = true;
+    }
+    if (todayIntegrity && todayIntegrity.status === 'warning') {
+      report += `  ⚠ 今日のデータに問題あり: ${todayIntegrity.warnings.join(' / ')}\n`;
+      salonReport.unreliable = true;
+    }
+
+    // データ量が極端に違う場合は差分を信頼しない
+    const todayDateCount = Object.keys(todayData.slots).length;
+    const prevDateCount = Object.keys(prevData.slots).length;
+    if (prevDateCount > 0 && todayDateCount > 0) {
+      const ratio = Math.min(todayDateCount, prevDateCount) / Math.max(todayDateCount, prevDateCount);
+      if (ratio < 0.5) {
+        report += `  ⚠ データ量に大きな差異があります (今日${todayDateCount}日 vs 前日${prevDateCount}日)\n`;
+        report += `  → スクレイプ失敗の可能性が高いため、差分をスキップします\n`;
+        skipDiff = true;
+        salonReport.unreliable = true;
+      }
+    }
+
     const filled = [];
     const opened = [];
     const newDates = [];
@@ -377,6 +461,7 @@ function generateDiffReport(outputDir, dateStr) {
         weeklyStats[weekKey].total++;
         if (status === '◎' || status === '△') weeklyStats[weekKey].available++;
         if (!prevTimeSlots) continue;
+        if (skipDiff) continue; // データ量差異が大きい場合は差分検出スキップ
         const prevStatus = prevTimeSlots[time];
         if (!prevStatus) continue;
         if ((prevStatus === '◎' || prevStatus === '△') && status === '×') {
@@ -387,13 +472,14 @@ function generateDiffReport(outputDir, dateStr) {
       }
     }
 
-    report += `[新しく埋まった枠] ${filled.length}件\n`;
+    const unreliableTag = salonReport.unreliable ? '（⚠参考値）' : '';
+    report += `[新しく埋まった枠] ${filled.length}件${unreliableTag}\n`;
     for (const item of filled.sort(sortByDateTime)) {
       report += `  ${formatDateWithDay(item.date)} ${item.time}  ${item.from}→${item.to}\n`;
     }
     if (filled.length === 0) report += `  なし\n`;
 
-    report += `\n[キャンセルで空いた枠] ${opened.length}件\n`;
+    report += `\n[キャンセルで空いた枠] ${opened.length}件${unreliableTag}\n`;
     for (const item of opened.sort(sortByDateTime)) {
       const isWeekend = isWeekendDate(item.date);
       const note = isWeekend ? '  ← 土日の後出し開放？要注目' : '';
