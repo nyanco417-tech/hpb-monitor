@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HPB 空き状況ダッシュボード</title>
+<style>
+:root {
+  --pink: #e91e63; --pink-light: #fce4ec;
+  --green: #388e3c; --green-light: #e8f5e9;
+  --red: #d32f2f; --orange: #f57c00; --yellow: #fbc02d;
+  --gray: #888; --bg: #f5f5f5; --card: #fff; --border: #e0e0e0;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Helvetica Neue', Arial, 'Hiragino Sans', sans-serif; background: var(--bg); color: #333; font-size: 14px; }
+
+.header { background: linear-gradient(135deg, var(--pink), #c2185b); color: #fff; padding: 12px 20px; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.header h1 { font-size: 16px; font-weight: 600; }
+.header-row { display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.header select { padding: 5px 10px; border-radius: 5px; border: none; font-size: 13px; background: rgba(255,255,255,.9); }
+.hbtn { background: rgba(255,255,255,.2); color: #fff; border: none; padding: 5px 12px; border-radius: 5px; cursor: pointer; font-size: 13px; }
+.hbtn:hover { background: rgba(255,255,255,.35); }
+.hbtn.active { background: #fff; color: var(--pink); font-weight: bold; }
+.date-nav { display: flex; align-items: center; gap: 6px; }
+.tabs { display: flex; gap: 3px; }
+.tab { padding: 5px 14px; border-radius: 5px 5px 0 0; background: rgba(255,255,255,.15); color: rgba(255,255,255,.8); cursor: pointer; font-size: 12px; border: none; }
+.tab.active { background: var(--bg); color: #333; font-weight: bold; }
+.nav-section { display: flex; gap: 3px; margin-left: auto; }
+
+.container { max-width: 1300px; margin: 0 auto; padding: 12px; }
+.card { background: var(--card); border-radius: 8px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.card h2 { font-size: 14px; color: var(--pink); margin-bottom: 10px; border-bottom: 2px solid var(--pink-light); padding-bottom: 4px; }
+.card h3 { font-size: 13px; margin: 10px 0 6px; }
+
+.cal-scroll { overflow-x: auto; }
+.cal-grid { display: grid; gap: 1px; background: var(--border); border-radius: 4px; overflow: hidden; font-size: 11px; }
+.cal-hdr { background: #f0f0f0; padding: 4px 2px; text-align: center; font-weight: bold; font-size: 10px; }
+.cal-hdr.we { background: var(--pink-light); }
+.cal-cell { padding: 2px; text-align: center; background: #fff; min-height: 20px; }
+.cal-time { background: #fafafa; font-weight: 500; text-align: right; padding-right: 4px; white-space: nowrap; }
+.s-avail { background: var(--green-light); color: var(--green); font-weight: bold; }
+.s-few { background: #fff3e0; color: var(--orange); font-weight: bold; }
+.s-full { background: #ffebee; color: #ccc; }
+.s-closed { background: #f9f9f9; color: #ddd; }
+
+.heatmap-grid { display: grid; gap: 1px; background: var(--border); border-radius: 4px; overflow: hidden; font-size: 11px; }
+.hm-cell { padding: 6px 4px; text-align: center; font-weight: bold; }
+.hm-header { background: #f0f0f0; font-weight: bold; padding: 6px 4px; text-align: center; }
+
+.stbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.stbl th { text-align: left; padding: 6px; border-bottom: 2px solid var(--border); font-size: 11px; color: var(--gray); }
+.stbl td { padding: 5px 6px; border-bottom: 1px solid #f0f0f0; }
+.bar-bg { background: #eee; border-radius: 3px; height: 16px; position: relative; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 3px; }
+.bar-lbl { position: absolute; right: 4px; top: 0; font-size: 10px; color: #555; line-height: 16px; }
+
+.rev-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.rev-card { flex: 1; min-width: 140px; background: #fafafa; border-radius: 6px; padding: 10px; text-align: center; }
+.rev-card .cnt { font-size: 24px; font-weight: bold; color: var(--pink); }
+.rev-card .rt { font-size: 13px; color: var(--orange); }
+.rev-card .lbl { font-size: 11px; color: var(--gray); margin-top: 2px; }
+.diff-pos { color: var(--green); font-weight: bold; }
+.diff-neg { color: var(--red); font-weight: bold; }
+.diff-zero { color: var(--gray); }
+
+.fill-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+.fill-tbl th { padding: 6px; border-bottom: 2px solid var(--border); text-align: left; font-size: 11px; color: var(--gray); }
+.fill-tbl td { padding: 4px 6px; border-bottom: 1px solid #f0f0f0; }
+
+.diff-frame iframe { width: 100%; height: 450px; border: 1px solid var(--border); border-radius: 4px; }
+
+.ss-grid { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 6px; }
+.ss-grid img { max-height: 160px; border-radius: 4px; border: 1px solid var(--border); cursor: pointer; }
+.ss-grid img:hover { box-shadow: 0 2px 6px rgba(0,0,0,.2); }
+
+.modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,.85); z-index: 200; justify-content: center; align-items: center; }
+.modal.show { display: flex; }
+.modal img { max-width: 95%; max-height: 95%; }
+.modal .x { position: absolute; top: 12px; right: 20px; color: #fff; font-size: 28px; cursor: pointer; }
+
+.loading { text-align: center; padding: 30px; color: var(--gray); }
+.spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid var(--pink-light); border-top-color: var(--pink); border-radius: 50%; animation: spin .6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 600px) {
+  .container { padding: 6px; }
+  .card { padding: 10px; }
+  .rev-row { flex-direction: column; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>HPB 空き状況ダッシュボード</h1>
+  <div class="header-row">
+    <div class="date-nav">
+      <button class="hbtn" id="prevDate">&larr;</button>
+      <select id="dateSelect"></select>
+      <button class="hbtn" id="nextDate">&rarr;</button>
+    </div>
+    <div class="tabs" id="salonTabs"></div>
+    <div class="nav-section">
+      <button class="hbtn active" data-v="all">全体</button>
+      <button class="hbtn" data-v="calendar">カレンダー</button>
+      <button class="hbtn" data-v="analysis">分析</button>
+      <button class="hbtn" data-v="report">レポート</button>
+    </div>
+  </div>
+</div>
+
+<div class="container" id="content">
+  <div class="loading"><div class="spinner"></div><p style="margin-top:6px">読み込み中...</p></div>
+</div>
+
+<div class="modal" id="modal" onclick="closeModal()">
+  <span class="x">&times;</span>
+  <img id="modalImg" src="">
+</div>
+
+<script>
+const BASE = 'data';
+const SALONS = [
+  { name: 'fullmoon', label: 'Full Moon', color: '#9c27b0' },
+  { name: 'flower', label: 'Flower Factories', color: '#2196f3' },
+  { name: 'lastella', label: 'La.stella', color: '#e91e63' },
+];
+const DAYS = ['日','月','火','水','木','金','土'];
+
+let allDates = [];
+let curDate = '';
+let curSalon = 'all';
+let curView = 'all';
+let cache = {};
+
+async function init() {
+  try {
+    const r = await fetch(BASE + '/index.json');
+    const d = await r.json();
+    allDates = d.dates.sort().reverse();
+  } catch {
+    document.getElementById('content').innerHTML = '<div class="card"><p>index.json の読み込みに失敗しました。</p></div>';
+    return;
+  }
+
+  const sel = document.getElementById('dateSelect');
+  for (const d of allDates) {
+    const o = document.createElement('option');
+    o.value = d;
+    const dt = new Date(d + 'T00:00:00');
+    o.textContent = d + ' (' + DAYS[dt.getDay()] + ')';
+    sel.appendChild(o);
+  }
+  sel.addEventListener('change', function() { loadDate(sel.value); });
+
+  var tabs = document.getElementById('salonTabs');
+  addTab(tabs, 'all', '全サロン', true);
+  SALONS.forEach(function(s) { addTab(tabs, s.name, s.label, false); });
+
+  document.getElementById('prevDate').addEventListener('click', function() { navDate(1); });
+  document.getElementById('nextDate').addEventListener('click', function() { navDate(-1); });
+
+  document.querySelectorAll('.nav-section .hbtn').forEach(function(b) {
+    b.addEventListener('click', function() {
+      curView = b.dataset.v;
+      document.querySelectorAll('.nav-section .hbtn').forEach(function(x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      render();
+    });
+  });
+
+  // Load all dates' data upfront for analysis features
+  await loadAllData();
+  loadDate(allDates[0]);
+}
+
+function addTab(parent, id, label, active) {
+  var b = document.createElement('button');
+  b.className = 'tab' + (active ? ' active' : '');
+  b.textContent = label;
+  b.addEventListener('click', function() {
+    curSalon = id;
+    parent.querySelectorAll('.tab').forEach(function(t) { t.classList.remove('active'); });
+    b.classList.add('active');
+    render();
+  });
+  parent.appendChild(b);
+}
+
+function navDate(off) {
+  var i = allDates.indexOf(curDate) + off;
+  if (i >= 0 && i < allDates.length) {
+    document.getElementById('dateSelect').value = allDates[i];
+    loadDate(allDates[i]);
+  }
+}
+
+async function loadAllData() {
+  var ps = [];
+  for (var di = 0; di < allDates.length; di++) {
+    var dd = allDates[di];
+    if (cache[dd]) continue;
+    cache[dd] = { salons: {}, reviews: null, diffHtml: null, prevReviews: null };
+    (function(dateStr) {
+      SALONS.forEach(function(s) {
+        ps.push(fetchJson(BASE + '/' + dateStr + '/' + s.name + '_data.json').then(function(d) { cache[dateStr].salons[s.name] = d; }));
+      });
+      ps.push(fetchJson(BASE + '/' + dateStr + '/reviews.json').then(function(d) { cache[dateStr].reviews = d; }));
+    })(dd);
+  }
+  await Promise.all(ps);
+}
+
+async function loadDate(dateStr) {
+  curDate = dateStr;
+  var idx = allDates.indexOf(dateStr);
+  document.getElementById('prevDate').disabled = idx >= allDates.length - 1;
+  document.getElementById('nextDate').disabled = idx <= 0;
+
+  // Load diff report HTML if not cached
+  var entry = cache[dateStr];
+  if (entry && entry.diffHtml === null) {
+    try {
+      var r = await fetch(BASE + '/' + dateStr + '/diff_report.html');
+      entry.diffHtml = r.ok ? await r.text() : undefined;
+    } catch { entry.diffHtml = undefined; }
+  }
+
+  // Set prevReviews
+  if (entry && idx < allDates.length - 1) {
+    entry.prevReviews = cache[allDates[idx + 1]]?.reviews || null;
+  }
+
+  render();
+}
+
+async function fetchJson(url) {
+  try { var r = await fetch(url); if (!r.ok) return null; return await r.json(); } catch { return null; }
+}
+
+// ===== Render =====
+function render() {
+  var entry = cache[curDate];
+  if (!entry) return;
+  var show = curSalon === 'all' ? SALONS : SALONS.filter(function(s) { return s.name === curSalon; });
+  var html = '';
+
+  if (curView === 'all' || curView === 'analysis') {
+    if (entry.reviews) html += renderReviews(entry);
+    html += renderCompareChart(entry);
+    show.forEach(function(s) { html += renderHeatmap(s, entry); });
+    html += renderFillSpeed();
+    html += renderWeekendPattern();
+    html += renderTrendChart();
+  }
+
+  if (curView === 'all' || curView === 'calendar') {
+    show.forEach(function(s) {
+      var d = entry.salons[s.name];
+      if (!d) return;
+      html += renderCalendar(s, d);
+      html += renderWeeklySummary(s, d);
+    });
+    show.forEach(function(s) { html += renderScreenshots(s); });
+  }
+
+  if (curView === 'all' || curView === 'report') {
+    if (entry.diffHtml) html += renderDiffReport(entry.diffHtml);
+  }
+
+  if (!html) html = '<div class="card"><p>データがありません。</p></div>';
+  document.getElementById('content').innerHTML = html;
+}
+
+// ----- Reviews -----
+function renderReviews(entry) {
+  var h = '<div class="card"><h2>口コミ状況</h2><div class="rev-row">';
+  SALONS.forEach(function(s) {
+    var r = entry.reviews && entry.reviews.salons && entry.reviews.salons[s.name];
+    if (!r) return;
+    var dh = '';
+    if (entry.prevReviews && entry.prevReviews.salons && entry.prevReviews.salons[s.name]) {
+      var diff = r.reviewCount - entry.prevReviews.salons[s.name].reviewCount;
+      dh = diff > 0 ? '<div class="diff-pos">+' + diff + '</div>' : diff === 0 ? '<div class="diff-zero">&plusmn;0</div>' : '<div class="diff-neg">' + diff + '</div>';
+    }
+    h += '<div class="rev-card"><div class="lbl">' + s.label + '</div><div class="cnt">' + r.reviewCount + '</div><div class="rt">' + stars(r.rating) + ' ' + r.rating + '</div>' + dh + '</div>';
+  });
+  h += '</div></div>';
+  return h;
+}
+
+function stars(n) { var s = ''; for (var i = 0; i < Math.round(n); i++) s += '\u2605'; return s; }
+
+// ----- 3 salon comparison -----
+function renderCompareChart(entry) {
+  var weeksMap = {};
+  SALONS.forEach(function(s) {
+    var d = entry.salons[s.name];
+    if (!d) return;
+    Object.entries(d.slots).forEach(function(pair) {
+      var ds = pair[0], ts = pair[1];
+      var wk = weekKey(ds);
+      if (!weeksMap[wk]) weeksMap[wk] = { sk: weekSortKey(ds) };
+      if (!weeksMap[wk][s.name]) weeksMap[wk][s.name] = { total: 0, avail: 0 };
+      Object.values(ts).forEach(function(st) {
+        if (st === '-') return;
+        weeksMap[wk][s.name].total++;
+        if (st === '◎' || st === '○' || st === '△') weeksMap[wk][s.name].avail++;
+      });
+    });
+  });
+  var sorted = Object.entries(weeksMap).sort(function(a, b) { return a[1].sk - b[1].sk; });
+  if (!sorted.length) return '';
+
+  var h = '<div class="card"><h2>3サロン比較 - 週別予約率</h2><table class="stbl"><tr><th>期間</th>';
+  SALONS.forEach(function(s) { h += '<th>' + s.label + '</th>'; });
+  h += '</tr>';
+  sorted.forEach(function(pair) {
+    var wk = pair[0], data = pair[1];
+    h += '<tr><td style="white-space:nowrap">' + wk + '</td>';
+    SALONS.forEach(function(s) {
+      var sd = data[s.name];
+      if (!sd || sd.total === 0) { h += '<td>-</td>'; return; }
+      var bk = sd.total - sd.avail;
+      var pct = ((bk / sd.total) * 100).toFixed(1);
+      var c = pctColor(pct);
+      h += '<td><div class="bar-bg"><div class="bar-fill" style="width:' + pct + '%;background:' + c + '"></div><div class="bar-lbl">' + pct + '%</div></div></td>';
+    });
+    h += '</tr>';
+  });
+  h += '</table></div>';
+  return h;
+}
+
+// ----- Heatmap -----
+function renderHeatmap(salon, entry) {
+  var d = entry.salons[salon.name];
+  if (!d) return '';
+  var agg = {};
+  Object.entries(d.slots).forEach(function(pair) {
+    var ds = pair[0], ts = pair[1];
+    var dow = new Date(ds + 'T00:00:00').getDay();
+    Object.entries(ts).forEach(function(tp) {
+      var time = tp[0], status = tp[1];
+      if (status === '-') return;
+      var k = dow + '-' + time;
+      if (!agg[k]) agg[k] = { avail: 0, total: 0 };
+      agg[k].total++;
+      if (status === '◎' || status === '○' || status === '△') agg[k].avail++;
+    });
+  });
+  var timesSet = {};
+  Object.keys(agg).forEach(function(k) { var t = k.substring(2); timesSet[t] = true; });
+  var times = Object.keys(timesSet).sort();
+  if (!times.length) return '';
+
+  var h = '<div class="card"><h2>' + salon.label + ' - 曜日\u00D7時間帯 予約率ヒートマップ</h2>';
+  h += '<p style="font-size:11px;color:var(--gray);margin-bottom:6px">色が濃いほど予約率が高い（空きが少ない）</p>';
+  h += '<div style="overflow-x:auto"><div class="heatmap-grid" style="grid-template-columns:50px repeat(7,1fr)">';
+  h += '<div class="hm-header"></div>';
+  for (var di = 1; di <= 7; di++) {
+    h += '<div class="hm-header">' + DAYS[di % 7] + '</div>';
+  }
+  times.forEach(function(time) {
+    h += '<div class="hm-cell" style="background:#fafafa;text-align:right;padding-right:4px;font-weight:500">' + time + '</div>';
+    for (var di = 1; di <= 7; di++) {
+      var dow = di % 7;
+      var a = agg[dow + '-' + time];
+      if (!a || a.total === 0) {
+        h += '<div class="hm-cell" style="background:#f5f5f5;color:#ddd">-</div>';
+      } else {
+        var bp = ((a.total - a.avail) / a.total * 100).toFixed(0);
+        var bg = heatColor(bp);
+        var fg = parseFloat(bp) > 70 ? '#fff' : '#333';
+        h += '<div class="hm-cell" style="background:' + bg + ';color:' + fg + '">' + bp + '%</div>';
+      }
+    }
+  });
+  h += '</div></div></div>';
+  return h;
+}
+
+function heatColor(pct) {
+  var p = parseFloat(pct);
+  if (p >= 95) return '#b71c1c';
+  if (p >= 85) return '#d32f2f';
+  if (p >= 75) return '#e57373';
+  if (p >= 60) return '#ff8a65';
+  if (p >= 45) return '#ffb74d';
+  if (p >= 30) return '#fff176';
+  if (p >= 15) return '#c8e6c9';
+  return '#a5d6a7';
+}
+
+// ----- Fill speed -----
+function renderFillSpeed() {
+  var sortedDates = allDates.slice().reverse();
+  if (sortedDates.length < 2) return '<div class="card"><h2>予約が埋まるスピード分析</h2><p style="color:var(--gray)">2日以上のデータが必要です（データ蓄積中）</p></div>';
+
+  var h = '<div class="card"><h2>予約が埋まるスピード分析</h2>';
+  h += '<p style="font-size:11px;color:var(--gray);margin-bottom:8px">各枠が「空き\u2192\u00D7」に変わるまでの日数</p>';
+  var hasAny = false;
+
+  SALONS.forEach(function(salon) {
+    var firstSeen = {};
+    var filledOn = {};
+    sortedDates.forEach(function(capDate) {
+      var sd = cache[capDate] && cache[capDate].salons && cache[capDate].salons[salon.name];
+      if (!sd) return;
+      Object.entries(sd.slots).forEach(function(pair) {
+        var slotDate = pair[0], ts = pair[1];
+        Object.entries(ts).forEach(function(tp) {
+          var time = tp[0], status = tp[1];
+          if (status === '-') return;
+          var k = slotDate + '|' + time;
+          if ((status === '◎' || status === '○' || status === '△') && !firstSeen[k]) {
+            firstSeen[k] = capDate;
+          }
+          if (status === '×' && firstSeen[k] && !filledOn[k]) {
+            filledOn[k] = capDate;
+          }
+        });
+      });
+    });
+
+    var wdDays = [], weDays = [];
+    Object.entries(filledOn).forEach(function(pair) {
+      var k = pair[0], fillDate = pair[1];
+      var seenDate = firstSeen[k];
+      if (!seenDate) return;
+      var slotDate = k.split('|')[0];
+      var days = daysBetween(seenDate, fillDate);
+      if (days <= 0) return;
+      var dow = new Date(slotDate + 'T00:00:00').getDay();
+      if (dow === 0 || dow === 6) weDays.push(days);
+      else wdDays.push(days);
+    });
+
+    if (wdDays.length === 0 && weDays.length === 0) return;
+    hasAny = true;
+    h += '<h3>' + salon.label + '</h3><div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">';
+    if (wdDays.length > 0) {
+      var avg = (wdDays.reduce(function(a, b) { return a + b; }, 0) / wdDays.length).toFixed(1);
+      var med = median(wdDays);
+      h += '<div class="rev-card"><div class="lbl">平日の枠</div><div class="cnt">' + avg + '</div><div class="lbl">平均 ' + avg + '日 / 中央値 ' + med + '日で埋まる (' + wdDays.length + '枠)</div></div>';
+    }
+    if (weDays.length > 0) {
+      var avg2 = (weDays.reduce(function(a, b) { return a + b; }, 0) / weDays.length).toFixed(1);
+      var med2 = median(weDays);
+      h += '<div class="rev-card"><div class="lbl">土日の枠</div><div class="cnt">' + avg2 + '</div><div class="lbl">平均 ' + avg2 + '日 / 中央値 ' + med2 + '日で埋まる (' + weDays.length + '枠)</div></div>';
+    }
+    h += '</div>';
+  });
+
+  if (!hasAny) h += '<p style="color:var(--gray)">まだ枠の変化が検出されていません（データ蓄積中）</p>';
+  h += '</div>';
+  return h;
+}
+
+// ----- Weekend open pattern -----
+function renderWeekendPattern() {
+  var sortedDates = allDates.slice().reverse();
+  if (sortedDates.length < 2) return '';
+  var hasData = false;
+  var h = '<div class="card"><h2>土日の後出し開放パターン</h2>';
+  h += '<p style="font-size:11px;color:var(--gray);margin-bottom:8px">\u00D7\u2192\u25CE/\u25B3 に変わった土日枠の検出</p>';
+
+  SALONS.forEach(function(salon) {
+    var rows = [];
+    for (var i = 1; i < sortedDates.length; i++) {
+      var prevD = cache[sortedDates[i - 1]] && cache[sortedDates[i - 1]].salons && cache[sortedDates[i - 1]].salons[salon.name];
+      var curD = cache[sortedDates[i]] && cache[sortedDates[i]].salons && cache[sortedDates[i]].salons[salon.name];
+      if (!prevD || !curD) continue;
+      var details = [];
+      Object.entries(curD.slots).forEach(function(pair) {
+        var slotDate = pair[0], ts = pair[1];
+        var dow = new Date(slotDate + 'T00:00:00').getDay();
+        if (dow !== 0 && dow !== 6) return;
+        var prevTs = prevD.slots[slotDate];
+        if (!prevTs) return;
+        Object.entries(ts).forEach(function(tp) {
+          var time = tp[0], status = tp[1];
+          if ((status === '◎' || status === '○' || status === '△') && prevTs[time] === '×') {
+            details.push(fmtDateShort(slotDate) + ' ' + time);
+          }
+        });
+      });
+      if (details.length > 0) {
+        rows.push({ date: sortedDates[i], count: details.length, details: details });
+        hasData = true;
+      }
+    }
+    if (rows.length === 0) return;
+    h += '<h3>' + salon.label + '</h3><table class="fill-tbl"><tr><th>検出日</th><th>開放枠数</th><th>詳細</th></tr>';
+    rows.forEach(function(r) {
+      h += '<tr><td>' + r.date + '</td><td style="text-align:center;font-weight:bold;color:var(--green)">' + r.count + '枠</td><td style="font-size:11px">' + r.details.join(', ') + '</td></tr>';
+    });
+    h += '</table>';
+  });
+
+  if (!hasData) h += '<p style="color:var(--gray)">まだ土日の後出し開放は検出されていません（データ蓄積中）</p>';
+  h += '</div>';
+  return h;
+}
+
+// ----- Trend chart -----
+function renderTrendChart() {
+  var sortedDates = allDates.slice().reverse();
+  if (sortedDates.length < 2) return '';
+
+  var series = {};
+  var revSeries = {};
+  SALONS.forEach(function(s) { series[s.name] = []; revSeries[s.name] = []; });
+
+  sortedDates.forEach(function(capDate) {
+    SALONS.forEach(function(s) {
+      var d = cache[capDate] && cache[capDate].salons && cache[capDate].salons[s.name];
+      if (!d) { series[s.name].push(null); }
+      else {
+        var total = 0, avail = 0;
+        Object.values(d.slots).forEach(function(ts) {
+          Object.values(ts).forEach(function(st) {
+            if (st === '-') return;
+            total++;
+            if (st === '◎' || st === '○' || st === '△') avail++;
+          });
+        });
+        series[s.name].push(total > 0 ? ((total - avail) / total * 100) : null);
+      }
+      var rv = cache[capDate] && cache[capDate].reviews && cache[capDate].reviews.salons && cache[capDate].reviews.salons[s.name];
+      revSeries[s.name].push(rv ? rv.reviewCount : null);
+    });
+  });
+
+  var h = '<div class="card"><h2>日次トレンド</h2>';
+  h += '<h3>全体予約率推移</h3>';
+  h += '<div style="overflow-x:auto">' + buildLineChart(sortedDates, series, 700, 220, 45, '%') + '</div>';
+  h += '<h3 style="margin-top:12px">口コミ数推移</h3>';
+  h += '<div style="overflow-x:auto">' + buildLineChart(sortedDates, revSeries, 700, 220, 45, '件') + '</div>';
+  h += '<div style="display:flex;gap:16px;margin-top:8px;justify-content:center">';
+  SALONS.forEach(function(s) {
+    h += '<span style="font-size:12px"><span style="display:inline-block;width:12px;height:12px;background:' + s.color + ';border-radius:2px;vertical-align:middle;margin-right:4px"></span>' + s.label + '</span>';
+  });
+  h += '</div></div>';
+  return h;
+}
+
+function buildLineChart(dates, series, W, H, PAD, unit) {
+  var chartW = W - PAD * 2, chartH = H - PAD * 2;
+  var n = dates.length;
+  if (n < 2) return '';
+
+  var allVals = [];
+  SALONS.forEach(function(s) {
+    series[s.name].forEach(function(v) { if (v !== null) allVals.push(v); });
+  });
+  if (allVals.length === 0) return '<p style="color:var(--gray)">データなし</p>';
+
+  var minV = Math.min.apply(null, allVals);
+  var maxV = Math.max.apply(null, allVals);
+  var range = maxV - minV || 1;
+  minV = Math.max(0, minV - range * 0.05);
+  maxV = maxV + range * 0.05;
+  var rng = maxV - minV || 1;
+
+  var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="max-width:' + W + 'px">';
+  for (var gi = 0; gi <= 4; gi++) {
+    var gy = PAD + chartH - (chartH * gi / 4);
+    var gval = (minV + rng * gi / 4).toFixed(unit === '%' ? 1 : 0);
+    svg += '<line x1="' + PAD + '" y1="' + gy + '" x2="' + (W - PAD) + '" y2="' + gy + '" stroke="#eee" stroke-width="1"/>';
+    svg += '<text x="' + (PAD - 4) + '" y="' + (gy + 4) + '" text-anchor="end" font-size="9" fill="#999">' + gval + '</text>';
+  }
+  for (var xi = 0; xi < n; xi++) {
+    var xx = PAD + (chartW * xi / (n - 1));
+    svg += '<text x="' + xx + '" y="' + (H - 6) + '" text-anchor="middle" font-size="9" fill="#999">' + dates[xi].slice(5) + '</text>';
+  }
+  SALONS.forEach(function(s) {
+    var pts = [];
+    for (var i = 0; i < n; i++) {
+      var v = series[s.name][i];
+      if (v === null) continue;
+      var px = PAD + (chartW * i / (n - 1));
+      var py = PAD + chartH - ((v - minV) / rng * chartH);
+      pts.push(px.toFixed(1) + ',' + py.toFixed(1));
+    }
+    if (pts.length > 1) {
+      svg += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + s.color + '" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>';
+      pts.forEach(function(p) {
+        var xy = p.split(',');
+        svg += '<circle cx="' + xy[0] + '" cy="' + xy[1] + '" r="3" fill="' + s.color + '"/>';
+      });
+    }
+  });
+  svg += '</svg>';
+  return svg;
+}
+
+// ----- Calendar -----
+function renderCalendar(salon, data) {
+  var slots = data.slots;
+  var sd = Object.keys(slots).sort();
+  if (!sd.length) return '';
+  var allT = {};
+  sd.forEach(function(d) { Object.keys(slots[d]).forEach(function(t) { allT[t] = true; }); });
+  var times = Object.keys(allT).sort();
+
+  var h = '<div class="card"><h2>' + salon.label + ' - 空き状況カレンダー</h2><div class="cal-scroll">';
+  h += '<div class="cal-grid" style="grid-template-columns:50px repeat(' + sd.length + ',minmax(36px,1fr))">';
+  h += '<div class="cal-hdr"></div>';
+  sd.forEach(function(d) {
+    var dt = new Date(d + 'T00:00:00');
+    var dow = dt.getDay();
+    h += '<div class="cal-hdr' + (dow === 0 || dow === 6 ? ' we' : '') + '">' + (dt.getMonth() + 1) + '/' + dt.getDate() + '<br>' + DAYS[dow] + '</div>';
+  });
+  times.forEach(function(t) {
+    h += '<div class="cal-cell cal-time">' + t + '</div>';
+    sd.forEach(function(d) {
+      var st = (slots[d] && slots[d][t]) || '-';
+      var cls = 'cal-cell ', disp = st;
+      if (st === '◎' || st === '○') { cls += 's-avail'; disp = '◎'; }
+      else if (st === '△') cls += 's-few';
+      else if (st === '×') cls += 's-full';
+      else { cls += 's-closed'; disp = '-'; }
+      h += '<div class="' + cls + '">' + disp + '</div>';
+    });
+  });
+  h += '</div></div></div>';
+  return h;
+}
+
+// ----- Weekly summary -----
+function renderWeeklySummary(salon, data) {
+  var weeks = {};
+  Object.entries(data.slots).forEach(function(pair) {
+    var ds = pair[0], ts = pair[1];
+    var wk = weekKey(ds);
+    if (!weeks[wk]) weeks[wk] = { total: 0, avail: 0, sk: weekSortKey(ds) };
+    Object.values(ts).forEach(function(st) {
+      if (st === '-') return;
+      weeks[wk].total++;
+      if (st === '◎' || st === '○' || st === '△') weeks[wk].avail++;
+    });
+  });
+  var sorted = Object.entries(weeks).sort(function(a, b) { return a[1].sk - b[1].sk; });
+  if (!sorted.length) return '';
+  var h = '<div class="card"><h2>' + salon.label + ' - 週別予約率</h2><table class="stbl"><tr><th>期間</th><th>予約状況</th><th>予約率</th></tr>';
+  sorted.forEach(function(pair) {
+    var lbl = pair[0], s = pair[1];
+    if (!s.total) return;
+    var bk = s.total - s.avail, pct = ((bk / s.total) * 100).toFixed(1), c = pctColor(pct);
+    h += '<tr><td style="white-space:nowrap">' + lbl + '</td><td><div class="bar-bg"><div class="bar-fill" style="width:' + pct + '%;background:' + c + '"></div><div class="bar-lbl">' + bk + '/' + s.total + '</div></div></td><td style="text-align:right;font-weight:bold;color:' + c + '">' + pct + '%</td></tr>';
+  });
+  h += '</table></div>';
+  return h;
+}
+
+// ----- Screenshots -----
+function renderScreenshots(salon) {
+  var h = '<div class="card"><h2>' + salon.label + ' - スクリーンショット</h2><div class="ss-grid">';
+  for (var w = 0; w <= 5; w++) {
+    h += '<img src="' + BASE + '/' + curDate + '/' + salon.name + '_week' + w + '.png" alt="week' + w + '" loading="lazy" onerror="this.style.display=\'none\'" onclick="openModal(this.src)">';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+// ----- Diff report -----
+function renderDiffReport(html) {
+  return '<div class="card"><h2>差分レポート</h2><div class="diff-frame"><iframe srcdoc="' + esc(html) + '"></iframe></div></div>';
+}
+
+// ===== Utils =====
+function weekKey(ds) {
+  var d = new Date(ds + 'T00:00:00');
+  var dow = d.getDay();
+  var mo = dow === 0 ? -6 : 1 - dow;
+  var mon = new Date(d); mon.setDate(mon.getDate() + mo);
+  var sun = new Date(mon); sun.setDate(sun.getDate() + 6);
+  return fmtS(mon) + '-' + fmtS(sun);
+}
+function weekSortKey(ds) {
+  var d = new Date(ds + 'T00:00:00');
+  var dow = d.getDay();
+  var mo = dow === 0 ? -6 : 1 - dow;
+  var mon = new Date(d); mon.setDate(mon.getDate() + mo);
+  return mon.getTime();
+}
+function fmtS(d) { return (d.getMonth() + 1) + '/' + String(d.getDate()).padStart(2, '0'); }
+function fmtDateShort(ds) {
+  var d = new Date(ds + 'T00:00:00');
+  return (d.getMonth() + 1) + '/' + d.getDate() + '(' + DAYS[d.getDay()] + ')';
+}
+function pctColor(p) {
+  var n = parseFloat(p);
+  if (n >= 90) return 'var(--red)'; if (n >= 70) return 'var(--orange)';
+  if (n >= 50) return 'var(--yellow)'; return 'var(--green)';
+}
+function esc(s) { return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function daysBetween(a, b) {
+  return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+}
+function median(arr) {
+  var s = arr.slice().sort(function(a, b) { return a - b; });
+  var mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : ((s[mid - 1] + s[mid]) / 2).toFixed(1);
+}
+function openModal(src) { document.getElementById('modalImg').src = src; document.getElementById('modal').classList.add('show'); }
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') closeModal(); });
+
+init();
+</script>
+</body>
+</html>
