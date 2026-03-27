@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const nodemailer = require('nodemailer');
 
-// 設定
+// 設定: フルスクレイプ対象（予約カレンダー + 口コミ + ブログ）
 const SALONS = [
   {
     name: 'fullmoon',
@@ -30,7 +30,63 @@ const SALONS = [
     storeId: 'H000715681',
     couponId: 'CP00000010301268',
   },
+  {
+    name: 'sisu',
+    label: 'studio SISU',
+    storeId: 'H000730731',
+    couponId: 'CP00000010615105',
+  },
+  {
+    name: 'cocoparis',
+    label: 'coco paris.',
+    storeId: 'H000736544',
+    couponId: 'CP00000010737154',
+  },
+  {
+    name: 'renecolor',
+    label: 'Renecolor',
+    storeId: 'H000618778',
+    couponId: 'CP00000009508647',
+  },
+  {
+    name: 'hiyori',
+    label: 'ひよりスタイリング',
+    storeId: 'H000645379',
+    couponId: 'CP00000008800897',
+  },
 ];
+
+// 口コミ・ブログのみ追跡（予約カレンダーはスクレイプしない）
+const REVIEW_ONLY_SALONS = [
+  {
+    name: 'stylrelier',
+    label: 'styleRELIER',
+    storeId: 'H000694796',
+  },
+  {
+    name: 'andcharm',
+    label: '&charm',
+    storeId: 'H000635977',
+  },
+  {
+    name: 'bloom',
+    label: 'Bloom.',
+    storeId: 'H000710177',
+  },
+  {
+    name: 'pulip',
+    label: 'Pulip',
+    storeId: 'H000766773',
+  },
+  {
+    name: 'toiettoi',
+    label: 'Toi et Toi',
+    storeId: 'H000791050',
+  },
+];
+
+// 全サロン（口コミ・ブログ取得用）
+const ALL_SALONS = [...SALONS, ...REVIEW_ONLY_SALONS];
 
 const WEEKS_TO_ADVANCE = 5;
 
@@ -571,7 +627,7 @@ function generateReviewSection(outputDir, dateStr) {
 
   // 今日の口コミ数一覧
   section += `[本日の口コミ数]\n`;
-  for (const salon of SALONS) {
+  for (const salon of ALL_SALONS) {
     const r = todayReviews.salons[salon.name];
     if (r) {
       section += `  ${salon.label.padEnd(20)} ${r.reviewCount}件  (${r.rating}点)\n`;
@@ -584,7 +640,7 @@ function generateReviewSection(outputDir, dateStr) {
   if (fs.existsSync(prevReviewsFile)) {
     const prevReviews = JSON.parse(fs.readFileSync(prevReviewsFile, 'utf-8'));
     section += `\n[前日比（${prevDateStr}→${dateStr}）]\n`;
-    for (const salon of SALONS) {
+    for (const salon of ALL_SALONS) {
       const today = todayReviews.salons[salon.name];
       const prev = prevReviews.salons[salon.name];
       if (today && prev) {
@@ -600,18 +656,18 @@ function generateReviewSection(outputDir, dateStr) {
   const weeklyReviews = collectWeeklyReviews();
   if (weeklyReviews.length > 0) {
     section += `  期間          |`;
-    for (const salon of SALONS) {
+    for (const salon of ALL_SALONS) {
       section += ` ${salon.label.substring(0, 10).padEnd(10)} |`;
     }
     section += `\n`;
     section += `  --------------|`;
-    for (const salon of SALONS) {
+    for (const salon of ALL_SALONS) {
       section += `------------|`;
     }
     section += `\n`;
     for (const week of weeklyReviews) {
       section += `  ${week.label.padEnd(14)}|`;
-      for (const salon of SALONS) {
+      for (const salon of ALL_SALONS) {
         const data = week.salons[salon.name];
         if (data) {
           const sign = data.diff > 0 ? '+' : '';
@@ -685,7 +741,7 @@ function collectWeeklyReviews() {
     const last = dailyData[weekInfo.lastDate];
     if (!first || !last) continue;
 
-    for (const salon of SALONS) {
+    for (const salon of ALL_SALONS) {
       if (first[salon.name] && last[salon.name]) {
         entry.salons[salon.name] = {
           diff: last[salon.name].reviewCount - first[salon.name].reviewCount,
@@ -823,7 +879,7 @@ function generateHtmlReviewSection(dateStr) {
   const prevReviewsFile = path.join(OUTPUT_BASE, prevDateStr, 'reviews.json');
   const prevReviews = fs.existsSync(prevReviewsFile) ? JSON.parse(fs.readFileSync(prevReviewsFile, 'utf-8')) : null;
 
-  for (const salon of SALONS) {
+  for (const salon of ALL_SALONS) {
     const r = todayReviews.salons[salon.name];
     if (!r) continue;
     let diffHtml = '-';
@@ -842,11 +898,11 @@ function generateHtmlReviewSection(dateStr) {
   if (weeklyReviews.length > 0) {
     html += `<p><strong>週別 口コミ増減</strong></p>`;
     html += `<table><tr><th>期間</th>`;
-    for (const salon of SALONS) html += `<th>${salon.label}</th>`;
+    for (const salon of ALL_SALONS) html += `<th>${salon.label}</th>`;
     html += `</tr>`;
     for (const week of weeklyReviews) {
       html += `<tr><td style="white-space:nowrap;">${week.label}</td>`;
-      for (const salon of SALONS) {
+      for (const salon of ALL_SALONS) {
         const data = week.salons[salon.name];
         if (data) {
           const color = data.diff > 0 ? '#388e3c' : data.diff === 0 ? '#999' : '#d32f2f';
@@ -934,13 +990,13 @@ async function main() {
     await browser.close();
   }
 
-  // 口コミ取得（ブラウザ再起動）
+  // 口コミ・ブログ取得（全サロン対象、ブラウザ再起動）
   const browser2 = await chromium.launch({ headless: true });
   const reviews = {};
   try {
-    for (let i = 0; i < SALONS.length; i++) {
+    for (let i = 0; i < ALL_SALONS.length; i++) {
       if (i > 0) await sleep(2000);
-      reviews[SALONS[i].name] = await scrapeReviewData(browser2, SALONS[i]);
+      reviews[ALL_SALONS[i].name] = await scrapeReviewData(browser2, ALL_SALONS[i]);
     }
   } finally {
     await browser2.close();
