@@ -338,7 +338,8 @@ async function processSalon(browser, salon, outputDir) {
     const data0 = await captureCalendar(page, salon, outputDir, 0);
     if (data0) mergeSlots(mergedSlots, data0.slots);
 
-    for (let w = 1; w <= WEEKS_TO_ADVANCE; w++) {
+    const weeksForSalon = salon.name === 'fullmoon' ? 11 : WEEKS_TO_ADVANCE;
+    for (let w = 1; w <= weeksForSalon; w++) {
       const nextLink = page.locator('a.arrowPagingWeekR.jscCalNavi');
       const nextExists = await nextLink.count();
       if (nextExists === 0) {
@@ -386,20 +387,22 @@ function validateSalonData(salon, mergedSlots, outputDir) {
   const totalSlots = Object.values(mergedSlots).reduce((sum, ts) => sum + Object.keys(ts).length, 0);
   const warnings = [];
 
-  // 期待値: 6週間×7日=42日前後、各日30スロット前後
+  // 期待値: Full Moonは12週間×7日=84日前後、他は6週間×7日=42日前後
+  var expectedMin = salon.name === 'fullmoon' ? 28 : 14;
   if (dateCount === 0) {
     warnings.push('データが1日分も取得できていません');
-  } else if (dateCount < 14) {
-    warnings.push(`取得日数が少なすぎます (${dateCount}日, 通常35-42日)`);
+  } else if (dateCount < expectedMin) {
+    warnings.push(`取得日数が少なすぎます (${dateCount}日, 通常${salon.name === 'fullmoon' ? '70-84' : '35-42'}日)`);
   }
 
   if (dateCount > 0 && totalSlots / dateCount < 10) {
     warnings.push(`1日あたりのスロット数が少なすぎます (平均${(totalSlots / dateCount).toFixed(0)}枠, 通常25-35枠)`);
   }
 
-  // スクリーンショット照合: week0〜5の存在チェック
+  // スクリーンショット照合
+  const maxWeek = salon.name === 'fullmoon' ? 11 : WEEKS_TO_ADVANCE;
   const missingScreenshots = [];
-  for (let w = 0; w <= WEEKS_TO_ADVANCE; w++) {
+  for (let w = 0; w <= maxWeek; w++) {
     const ssPath = path.join(outputDir, `${salon.name}_week${w}.png`);
     if (!fs.existsSync(ssPath)) {
       missingScreenshots.push(`week${w}`);

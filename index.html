@@ -264,7 +264,8 @@ function render() {
     if (entry.reviews) html += renderReviews(entry);
     html += renderCompareChart(entry);
     show.forEach(function(s) { html += renderHeatmap(s, entry); });
-    html += renderFillSpeed();
+    // html += renderFillSpeed(); // 旧ロジック非表示
+    html += renderFillCurve();
     html += renderWeekendPattern();
     html += renderTrendChart();
     html += renderReviewPace();
@@ -471,6 +472,129 @@ function renderFillSpeed() {
   });
 
   if (!hasAny) h += '<p style="color:var(--gray)">まだ枠の変化が検出されていません（データ蓄積中）</p>';
+  h += '</div>';
+  return h;
+}
+
+// ----- Fill curve: 予約率の埋まり方カーブ -----
+function renderFillCurve() {
+  var sortedDates = allDates.slice().reverse(); // 古い順
+  if (sortedDates.length < 2) return '<div class="card"><h2>埋まり方カーブ</h2><p style="color:var(--gray)">2日以上のデータが必要です（データ蓄積中）</p></div>';
+
+  // 各サロン × 各キャプチャ日: 「当日まであとN日」→ 予約率 を集める
+  // 構造: salonData[salonName].weekday[daysAhead] = [rate, rate, ...]
+  //        salonData[salonName].weekend[daysAhead] = [rate, rate, ...]
+  var salonData = {};
+  SALONS.forEach(function(salon) {
+    salonData[salon.name] = { weekday: {}, weekend: {} };
+  });
+
+  sortedDates.forEach(function(capDate) {
+    var capTime = new Date(capDate + 'T00:00:00').getTime();
+    SALONS.forEach(function(salon) {
+      var sd = cache[capDate] && cache[capDate].salons && cache[capDate].salons[salon.name];
+      if (!sd || !sd.slots) return;
+      Object.entries(sd.slots).forEach(function(pair) {
+        var slotDate = pair[0], ts = pair[1];
+        var slotTime = new Date(slotDate + 'T00:00:00').getTime();
+        var daysAhead = Math.round((slotTime - capTime) / 86400000);
+        if (daysAhead < 0) return; // 過去の日付はスキップ
+
+        var total = 0, booked = 0;
+        Object.entries(ts).forEach(function(tp) {
+          var status = tp[1];
+          if (status === '-') return;
+          total++;
+          if (status === '×') booked++;
+        });
+        if (total === 0) return;
+        var rate = Math.round(booked / total * 100);
+
+        var dow = new Date(slotDate + 'T00:00:00').getDay();
+        var bucket = (dow === 0 || dow === 6) ? salonData[salon.name].weekend : salonData[salon.name].weekday;
+        if (!bucket[daysAhead]) bucket[daysAhead] = [];
+        bucket[daysAhead].push(rate);
+      });
+    });
+  });
+
+  // daysAhead ごとの平均予約率を計算
+  function calcAvg(bucket) {
+    var result = {};
+    Object.entries(bucket).forEach(function(pair) {
+      var d = parseInt(pair[0]), vals = pair[1];
+      var sum = 0;
+      vals.forEach(function(v) { sum += v; });
+      result[d] = Math.round(sum / vals.length);
+    });
+    return result;
+  }
+
+  // SVGチャート描画
+  function buildCurveChart(type, label) {
+    var W = 700, H = 250, PAD = 45;
+    var chartW = W - PAD * 2, chartH = H - PAD * 2;
+
+    // 全サロンのdaysAhead範囲を取得
+    var allDays = [];
+    SALONS.forEach(function(s) {
+      var avg = calcAvg(salonData[s.name][type]);
+      Object.keys(avg).forEach(function(d) { allDays.push(parseInt(d)); });
+    });
+    if (allDays.length === 0) return '';
+    var maxDay = Math.max.apply(null, allDays);
+    var minDay = Math.min.apply(null, allDays);
+    if (maxDay <= minDay) return '';
+
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="max-width:' + W + 'px">';
+
+    // Y軸グリッド (0%-100%)
+    for (var gi = 0; gi <= 4; gi++) {
+      var gy = PAD + chartH - (chartH * gi / 4);
+      var gval = (gi * 25);
+      svg += '<line x1="' + PAD + '" y1="' + gy + '" x2="' + (W - PAD) + '" y2="' + gy + '" stroke="#eee" stroke-width="1"/>';
+      svg += '<text x="' + (PAD - 4) + '" y="' + (gy + 4) + '" text-anchor="end" font-size="9" fill="#999">' + gval + '%</text>';
+    }
+
+    // X軸ラベル（当日まであとN日 → 右が当日に近い）
+    var step = maxDay > 30 ? 7 : maxDay > 14 ? 3 : 1;
+    for (var xi = minDay; xi <= maxDay; xi += step) {
+      var xx = PAD + chartW - (chartW * (xi - minDay) / (maxDay - minDay));
+      svg += '<text x="' + xx + '" y="' + (H - 6) + '" text-anchor="middle" font-size="9" fill="#999">' + xi + '日前</text>';
+    }
+
+    // 各サロンのライン
+    SALONS.forEach(function(s) {
+      var avg = calcAvg(salonData[s.name][type]);
+      // daysAhead降順（左が遠い未来、右が当日に近い）
+      var days = Object.keys(avg).map(Number).sort(function(a, b) { return b - a; });
+      if (days.length < 2) return;
+      var pts = [];
+      days.forEach(function(d) {
+        var px = PAD + chartW - (chartW * (d - minDay) / (maxDay - minDay));
+        var py = PAD + chartH - (chartH * avg[d] / 100);
+        pts.push(px.toFixed(1) + ',' + py.toFixed(1));
+      });
+      svg += '<polyline points="' + pts.join(' ') + '" fill="none" stroke="' + s.color + '" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>';
+    });
+
+    svg += '</svg>';
+    return '<p style="font-weight:600;margin:8px 0 4px">' + label + '</p><div style="overflow-x:auto">' + svg + '</div>';
+  }
+
+  var h = '<div class="card"><h2>埋まり方カーブ</h2>';
+  h += '<p style="font-size:11px;color:var(--gray);margin-bottom:8px">「当日まであとN日」の時点で予約率が何%だったか（左が遠い未来、右が当日に近い）</p>';
+
+  // 凡例
+  h += '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;font-size:11px">';
+  SALONS.forEach(function(s) {
+    h += '<span><span style="display:inline-block;width:14px;height:3px;background:' + s.color + ';vertical-align:middle;margin-right:3px"></span>' + s.label + '</span>';
+  });
+  h += '</div>';
+
+  h += buildCurveChart('weekday', '平日の枠');
+  h += buildCurveChart('weekend', '土日の枠');
+
   h += '</div>';
   return h;
 }
