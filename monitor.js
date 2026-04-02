@@ -109,6 +109,25 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+/**
+ * リトライ付きページ遷移
+ * タイムアウトエラー時に指定回数まで再試行する
+ */
+async function gotoWithRetry(page, url, options = {}, maxRetries = 2) {
+  const { retryDelay = 10000, ...gotoOptions } = options;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      await page.goto(url, gotoOptions);
+      return;
+    } catch (err) {
+      const isTimeout = err.message.includes('Timeout') || err.message.includes('timeout');
+      if (!isTimeout || attempt >= maxRetries) throw err;
+      console.log(`  [RETRY] タイムアウト発生、${retryDelay / 1000}秒後にリトライ (${attempt + 1}/${maxRetries})...`);
+      await sleep(retryDelay);
+    }
+  }
+}
+
 function getPrevDateStr(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() - 1);
@@ -127,7 +146,7 @@ async function scrapeReviewData(browser, salon) {
   try {
     // 1. サロンTOPからJSON-LDで口コミ数・評価を取得
     const salonUrl = `https://beauty.hotpepper.jp/kr/sln${salon.storeId}/`;
-    await page.goto(salonUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    await gotoWithRetry(page, salonUrl, { waitUntil: 'networkidle', timeout: 30000 });
 
     const reviewData = await page.evaluate(() => {
       const scripts = document.querySelectorAll('script[type="application/ld+json"]');
@@ -158,7 +177,7 @@ async function scrapeReviewData(browser, salon) {
     // 2. 口コミ一覧から最新の投稿日を取得（最大20件）
     await sleep(1000);
     const reviewUrl = `https://beauty.hotpepper.jp/kr/sln${salon.storeId}/review/`;
-    await page.goto(reviewUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    await gotoWithRetry(page, reviewUrl, { waitUntil: 'networkidle', timeout: 30000 });
 
     const recentReviews = await page.evaluate(() => {
       const reviews = [];
@@ -177,7 +196,7 @@ async function scrapeReviewData(browser, salon) {
     // 3. ブログ一覧からブログ総数を取得
     await sleep(1000);
     const blogUrl = `https://beauty.hotpepper.jp/kr/sln${salon.storeId}/blog/`;
-    await page.goto(blogUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    await gotoWithRetry(page, blogUrl, { waitUntil: 'networkidle', timeout: 30000 });
 
     const blogCount = await page.evaluate(() => {
       const text = document.body.innerText;
@@ -316,7 +335,7 @@ async function processSalon(browser, salon, outputDir) {
   try {
     const couponUrl = `https://beauty.hotpepper.jp/CSP/kr/reserve/?storeId=${salon.storeId}`;
     console.log(`  クーポンページにアクセス...`);
-    await page.goto(couponUrl, { waitUntil: 'networkidle', timeout: 30000 });
+    await gotoWithRetry(page, couponUrl, { waitUntil: 'networkidle', timeout: 30000 });
 
     const couponLink = page.locator(`a[href*="couponId=${salon.couponId}"][href*="add=0"]`);
     const linkCount = await couponLink.count();
@@ -350,7 +369,7 @@ async function processSalon(browser, salon, outputDir) {
       const nextUrl = href.startsWith('http') ? href : `https://beauty.hotpepper.jp${href}`;
       console.log(`  次の一週間へ (week ${w})...`);
       await sleep(2000);
-      await page.goto(nextUrl, { waitUntil: 'networkidle', timeout: 30000 });
+      await gotoWithRetry(page, nextUrl, { waitUntil: 'networkidle', timeout: 30000 });
       await page.waitForSelector('#jsRsvCdTbl', { timeout: 10000 });
       const dataW = await captureCalendar(page, salon, outputDir, w);
       if (dataW) mergeSlots(mergedSlots, dataW.slots);
@@ -971,14 +990,18 @@ async function sendEmail(dateStr, reportText, reportHtml, outputDir) {
   }
 }
 
-async function main() {
-  const dateStr = getDateStr();
-  const outputDir = path.join(OUTPUT_BASE, dateStr);
+/**
+ * カレンダーデータが1件でも取得できたかチェック
+ */
+function hasAnyCalendarData(outputDir) {
+  for (const salon of SALONS) {
+    const jsonPath = path.join(outputDir, `${salon.name}_data.json`);
+    if (fs.existsSync(jsonPath)) return true;
+  }
+  return false;
+}
 
-  fs.mkdirSync(outputDir, { recursive: true });
-  console.log(`出力先: ${outputDir}`);
-  console.log(`日付: ${dateStr}`);
-
+async function runScrape(dateStr, outputDir) {
   const browser = await chromium.launch({ headless: true });
 
   try {
@@ -1007,6 +1030,30 @@ async function main() {
   const reviewsPath = path.join(outputDir, 'reviews.json');
   fs.writeFileSync(reviewsPath, JSON.stringify({ date: dateStr, salons: reviews }, null, 2), 'utf-8');
   console.log(`\n口コミデータ保存: reviews.json`);
+}
+
+async function main() {
+  const dateStr = getDateStr();
+  const outputDir = path.join(OUTPUT_BASE, dateStr);
+
+  fs.mkdirSync(outputDir, { recursive: true });
+  console.log(`出力先: ${outputDir}`);
+  console.log(`日付: ${dateStr}`);
+
+  // 1回目のスクレイプ実行
+  await runScrape(dateStr, outputDir);
+
+  // 全サロンのカレンダーデータが取得できなかった場合、60秒待ってリトライ
+  if (!hasAnyCalendarData(outputDir)) {
+    console.log(`\n[RETRY] カレンダーデータが全サロン取得失敗。60秒後に全体リトライします...`);
+    await sleep(60000);
+    // エラースクリーンショットを削除して再取得
+    for (const salon of SALONS) {
+      const errFile = path.join(outputDir, `${salon.name}_error.png`);
+      if (fs.existsSync(errFile)) fs.unlinkSync(errFile);
+    }
+    await runScrape(dateStr, outputDir);
+  }
 
   const { text, html, hasPrev } = generateDiffReport(outputDir, dateStr);
 
