@@ -263,7 +263,7 @@ function render() {
   if (curView === 'all' || curView === 'analysis') {
     if (entry.reviews) html += renderReviews(entry);
     html += renderCompareChart(entry);
-    show.forEach(function(s) { html += renderHeatmap(s, entry); });
+    html += renderFilledYesterday(entry);
     // html += renderFillSpeed(); // 旧ロジック非表示
     html += renderFillCurve();
     html += renderWeekendPattern();
@@ -351,64 +351,67 @@ function renderCompareChart(entry) {
   return h;
 }
 
-// ----- Heatmap -----
-function renderHeatmap(salon, entry) {
-  var d = entry.salons[salon.name];
-  if (!d) return '';
-  var agg = {};
-  Object.entries(d.slots).forEach(function(pair) {
-    var ds = pair[0], ts = pair[1];
-    var dow = new Date(ds + 'T00:00:00').getDay();
-    Object.entries(ts).forEach(function(tp) {
-      var time = tp[0], status = tp[1];
-      if (status === '-') return;
-      var k = dow + '-' + time;
-      if (!agg[k]) agg[k] = { avail: 0, total: 0 };
-      agg[k].total++;
-      if (status === '◎' || status === '○' || status === '△') agg[k].avail++;
+// ----- Filled yesterday (前日に埋まった枠) -----
+function renderFilledYesterday(entry) {
+  var idx = allDates.indexOf(curDate);
+  if (idx >= allDates.length - 1) return '<div class="card"><h2>前日からの予約変動</h2><p style="color:var(--gray)">前日のデータがありません</p></div>';
+  var prevDate = allDates[idx + 1];
+  var prevEntry = cache[prevDate];
+  if (!prevEntry) return '';
+
+  var h = '<div class="card"><h2>前日からの予約変動</h2>';
+  h += '<p style="font-size:11px;color:var(--gray);margin-bottom:8px">' + prevDate + ' → ' + curDate + ' で変化した枠</p>';
+  h += '<table class="stbl"><tr><th>サロン</th><th>新規予約 (空き→×)</th><th>キャンセル (×→空き)</th><th>差引</th></tr>';
+
+  var hasAny = false;
+  SALONS.forEach(function(s) {
+    var cur = entry.salons[s.name];
+    var prev = prevEntry.salons[s.name];
+    if (!cur || !prev) return;
+
+    var filled = 0, cancelled = 0;
+    var filledDetails = [], cancelDetails = [];
+    Object.keys(cur.slots).forEach(function(slotDate) {
+      if (!prev.slots[slotDate]) return;
+      Object.keys(cur.slots[slotDate]).forEach(function(time) {
+        var curSt = cur.slots[slotDate][time];
+        var prevSt = prev.slots[slotDate] && prev.slots[slotDate][time];
+        if (!prevSt || prevSt === '-' || curSt === '-') return;
+        var wasAvail = (prevSt === '◎' || prevSt === '○' || prevSt === '△');
+        var nowFull = (curSt === '×');
+        var wasFull = (prevSt === '×');
+        var nowAvail = (curSt === '◎' || curSt === '○' || curSt === '△');
+        if (wasAvail && nowFull) {
+          filled++;
+          filledDetails.push(fmtDateShort(slotDate) + ' ' + time);
+        }
+        if (wasFull && nowAvail) {
+          cancelled++;
+          cancelDetails.push(fmtDateShort(slotDate) + ' ' + time);
+        }
+      });
     });
-  });
-  var timesSet = {};
-  Object.keys(agg).forEach(function(k) { var t = k.substring(2); timesSet[t] = true; });
-  var times = Object.keys(timesSet).sort();
-  if (!times.length) return '';
 
-  var h = '<div class="card"><h2>' + salon.label + ' - 曜日\u00D7時間帯 予約率ヒートマップ</h2>';
-  h += '<p style="font-size:11px;color:var(--gray);margin-bottom:6px">色が濃いほど予約率が高い（空きが少ない）</p>';
-  h += '<div style="overflow-x:auto"><div class="heatmap-grid" style="grid-template-columns:50px repeat(7,1fr)">';
-  h += '<div class="hm-header"></div>';
-  for (var di = 1; di <= 7; di++) {
-    h += '<div class="hm-header">' + DAYS[di % 7] + '</div>';
-  }
-  times.forEach(function(time) {
-    h += '<div class="hm-cell" style="background:#fafafa;text-align:right;padding-right:4px;font-weight:500">' + time + '</div>';
-    for (var di = 1; di <= 7; di++) {
-      var dow = di % 7;
-      var a = agg[dow + '-' + time];
-      if (!a || a.total === 0) {
-        h += '<div class="hm-cell" style="background:#f5f5f5;color:#ddd">-</div>';
-      } else {
-        var bp = ((a.total - a.avail) / a.total * 100).toFixed(0);
-        var bg = heatColor(bp);
-        var fg = parseFloat(bp) > 70 ? '#fff' : '#333';
-        h += '<div class="hm-cell" style="background:' + bg + ';color:' + fg + '">' + bp + '%</div>';
-      }
-    }
+    hasAny = hasAny || filled > 0 || cancelled > 0;
+    var net = filled - cancelled;
+    var netColor = net > 0 ? 'var(--red)' : net < 0 ? 'var(--green)' : 'var(--gray)';
+    var netStr = net > 0 ? '+' + net : '' + net;
+
+    h += '<tr>';
+    h += '<td style="font-weight:bold">' + s.label + '</td>';
+    h += '<td style="text-align:center"><span style="font-size:18px;font-weight:bold;color:var(--red)">' + filled + '</span><span style="font-size:11px;color:var(--gray)">枠</span>';
+    if (filledDetails.length > 0 && filledDetails.length <= 8) h += '<div style="font-size:10px;color:var(--gray);margin-top:2px">' + filledDetails.join(', ') + '</div>';
+    h += '</td>';
+    h += '<td style="text-align:center"><span style="font-size:18px;font-weight:bold;color:var(--green)">' + cancelled + '</span><span style="font-size:11px;color:var(--gray)">枠</span>';
+    if (cancelDetails.length > 0 && cancelDetails.length <= 8) h += '<div style="font-size:10px;color:var(--gray);margin-top:2px">' + cancelDetails.join(', ') + '</div>';
+    h += '</td>';
+    h += '<td style="text-align:center;font-weight:bold;color:' + netColor + '">' + netStr + '</td>';
+    h += '</tr>';
   });
-  h += '</div></div></div>';
+
+  if (!hasAny) h += '<tr><td colspan="4" style="text-align:center;color:var(--gray)">変動なし</td></tr>';
+  h += '</table></div>';
   return h;
-}
-
-function heatColor(pct) {
-  var p = parseFloat(pct);
-  if (p >= 95) return '#b71c1c';
-  if (p >= 85) return '#d32f2f';
-  if (p >= 75) return '#e57373';
-  if (p >= 60) return '#ff8a65';
-  if (p >= 45) return '#ffb74d';
-  if (p >= 30) return '#fff176';
-  if (p >= 15) return '#c8e6c9';
-  return '#a5d6a7';
 }
 
 // ----- Fill speed -----
