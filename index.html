@@ -254,6 +254,9 @@ async function fetchJson(url) {
 }
 
 // ===== Render =====
+function filteredSalons() { return curSalon === 'all' ? SALONS : SALONS.filter(function(s){return s.name === curSalon;}); }
+function filteredAllSalons() { return curSalon === 'all' ? ALL_SALONS : ALL_SALONS.filter(function(s){return s.name === curSalon;}); }
+
 function render() {
   var entry = cache[curDate];
   if (!entry) return;
@@ -294,7 +297,7 @@ function render() {
 // ----- Reviews -----
 function renderReviews(entry) {
   var h = '<div class="card"><h2>口コミ状況</h2><div class="rev-row">';
-  ALL_SALONS.forEach(function(s) {
+  filteredAllSalons().forEach(function(s) {
     var r = entry.reviews && entry.reviews.salons && entry.reviews.salons[s.name];
     if (!r) return;
     var dh = '';
@@ -312,8 +315,9 @@ function stars(n) { var s = ''; for (var i = 0; i < Math.round(n); i++) s += '\u
 
 // ----- 3 salon comparison -----
 function renderCompareChart(entry) {
+  var targets = filteredSalons();
   var weeksMap = {};
-  SALONS.forEach(function(s) {
+  targets.forEach(function(s) {
     var d = entry.salons[s.name];
     if (!d) return;
     Object.entries(d.slots).forEach(function(pair) {
@@ -331,13 +335,14 @@ function renderCompareChart(entry) {
   var sorted = Object.entries(weeksMap).sort(function(a, b) { return a[1].sk - b[1].sk; });
   if (!sorted.length) return '';
 
-  var h = '<div class="card"><h2>3サロン比較 - 週別予約率</h2><table class="stbl"><tr><th>期間</th>';
-  SALONS.forEach(function(s) { h += '<th>' + s.label + '</th>'; });
+  var title = curSalon === 'all' ? 'サロン比較 - 週別予約率' : targets[0].label + ' - 週別予約率';
+  var h = '<div class="card"><h2>' + title + '</h2><table class="stbl"><tr><th>期間</th>';
+  targets.forEach(function(s) { h += '<th>' + s.label + '</th>'; });
   h += '</tr>';
   sorted.forEach(function(pair) {
     var wk = pair[0], data = pair[1];
     h += '<tr><td style="white-space:nowrap">' + wk + '</td>';
-    SALONS.forEach(function(s) {
+    targets.forEach(function(s) {
       var sd = data[s.name];
       if (!sd || sd.total === 0) { h += '<td>-</td>'; return; }
       var bk = sd.total - sd.avail;
@@ -364,7 +369,7 @@ function renderFilledYesterday(entry) {
   h += '<table class="stbl"><tr><th>サロン</th><th>新規予約 (空き→×)</th><th>キャンセル (×→空き)</th><th>差引</th></tr>';
 
   var hasAny = false;
-  SALONS.forEach(function(s) {
+  filteredSalons().forEach(function(s) {
     var cur = entry.salons[s.name];
     var prev = prevEntry.salons[s.name];
     if (!cur || !prev) return;
@@ -487,14 +492,15 @@ function renderFillCurve() {
   // 各サロン × 各キャプチャ日: 「当日まであとN日」→ 予約率 を集める
   // 構造: salonData[salonName].weekday[daysAhead] = [rate, rate, ...]
   //        salonData[salonName].weekend[daysAhead] = [rate, rate, ...]
+  var targets = filteredSalons();
   var salonData = {};
-  SALONS.forEach(function(salon) {
+  targets.forEach(function(salon) {
     salonData[salon.name] = { weekday: {}, weekend: {} };
   });
 
   sortedDates.forEach(function(capDate) {
     var capTime = new Date(capDate + 'T00:00:00').getTime();
-    SALONS.forEach(function(salon) {
+    targets.forEach(function(salon) {
       var sd = cache[capDate] && cache[capDate].salons && cache[capDate].salons[salon.name];
       if (!sd || !sd.slots) return;
       Object.entries(sd.slots).forEach(function(pair) {
@@ -540,7 +546,7 @@ function renderFillCurve() {
 
     // 全サロンのdaysAhead範囲を取得
     var allDays = [];
-    SALONS.forEach(function(s) {
+    targets.forEach(function(s) {
       var avg = calcAvg(salonData[s.name][type]);
       Object.keys(avg).forEach(function(d) { allDays.push(parseInt(d)); });
     });
@@ -567,7 +573,7 @@ function renderFillCurve() {
     }
 
     // 各サロンのライン
-    SALONS.forEach(function(s) {
+    targets.forEach(function(s) {
       var avg = calcAvg(salonData[s.name][type]);
       // daysAhead降順（左が遠い未来、右が当日に近い）
       var days = Object.keys(avg).map(Number).sort(function(a, b) { return b - a; });
@@ -590,7 +596,7 @@ function renderFillCurve() {
 
   // 凡例
   h += '<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;font-size:11px">';
-  SALONS.forEach(function(s) {
+  targets.forEach(function(s) {
     h += '<span><span style="display:inline-block;width:14px;height:3px;background:' + s.color + ';vertical-align:middle;margin-right:3px"></span>' + s.label + '</span>';
   });
   h += '</div>';
@@ -610,7 +616,7 @@ function renderWeekendPattern() {
   var h = '<div class="card"><h2>土日の後出し開放パターン</h2>';
   h += '<p style="font-size:11px;color:var(--gray);margin-bottom:8px">\u00D7\u2192\u25CE/\u25B3 に変わった土日枠の検出</p>';
 
-  SALONS.forEach(function(salon) {
+  filteredSalons().forEach(function(salon) {
     var rows = [];
     for (var i = 1; i < sortedDates.length; i++) {
       var prevD = cache[sortedDates[i - 1]] && cache[sortedDates[i - 1]].salons && cache[sortedDates[i - 1]].salons[salon.name];
@@ -653,13 +659,15 @@ function renderTrendChart() {
   var sortedDates = allDates.slice().reverse();
   if (sortedDates.length < 2) return '';
 
+  var calTargets = filteredSalons();
+  var revTargets = filteredAllSalons();
   var series = {};
   var revSeries = {};
-  SALONS.forEach(function(s) { series[s.name] = []; });
-  ALL_SALONS.forEach(function(s) { revSeries[s.name] = []; });
+  calTargets.forEach(function(s) { series[s.name] = []; });
+  revTargets.forEach(function(s) { revSeries[s.name] = []; });
 
   sortedDates.forEach(function(capDate) {
-    SALONS.forEach(function(s) {
+    calTargets.forEach(function(s) {
       var d = cache[capDate] && cache[capDate].salons && cache[capDate].salons[s.name];
       if (!d) { series[s.name].push(null); }
       else {
@@ -674,7 +682,7 @@ function renderTrendChart() {
         series[s.name].push(total > 0 ? ((total - avail) / total * 100) : null);
       }
     });
-    ALL_SALONS.forEach(function(s) {
+    revTargets.forEach(function(s) {
       var rv = cache[capDate] && cache[capDate].reviews && cache[capDate].reviews.salons && cache[capDate].reviews.salons[s.name];
       revSeries[s.name].push(rv ? rv.reviewCount : null);
     });
@@ -684,14 +692,14 @@ function renderTrendChart() {
   h += '<h3>全体予約率推移</h3>';
   h += '<div style="overflow-x:auto">' + buildLineChart(sortedDates, series, 700, 220, 45, '%') + '</div>';
   h += '<div style="display:flex;gap:16px;margin-top:8px;justify-content:center">';
-  SALONS.forEach(function(s) {
+  calTargets.forEach(function(s) {
     h += '<span style="font-size:12px"><span style="display:inline-block;width:12px;height:12px;background:' + s.color + ';border-radius:2px;vertical-align:middle;margin-right:4px"></span>' + s.label + '</span>';
   });
   h += '</div>';
   h += '<h3 style="margin-top:12px">口コミ数推移</h3>';
   h += '<div style="overflow-x:auto">' + buildLineChart(sortedDates, revSeries, 700, 220, 45, '件') + '</div>';
   h += '<div style="display:flex;gap:16px;margin-top:8px;justify-content:center">';
-  ALL_SALONS.forEach(function(s) {
+  revTargets.forEach(function(s) {
     h += '<span style="font-size:12px"><span style="display:inline-block;width:12px;height:12px;background:' + s.color + ';border-radius:2px;vertical-align:middle;margin-right:4px"></span>' + s.label + '</span>';
   });
   h += '</div></div>';
@@ -769,7 +777,7 @@ function renderReviewPace() {
 
   h += '<table class="stbl"><tr><th>サロン</th><th>現在の口コミ数</th><th>観測期間の増加</th><th>日平均</th><th>週ペース</th><th>月ペース(推定)</th><th>推定月間来客数</th></tr>';
 
-  ALL_SALONS.forEach(function(s) {
+  filteredAllSalons().forEach(function(s) {
     var firstRev = cache[firstDate] && cache[firstDate].reviews && cache[firstDate].reviews.salons && cache[firstDate].reviews.salons[s.name];
     var lastRev = cache[lastDate] && cache[lastDate].reviews && cache[lastDate].reviews.salons && cache[lastDate].reviews.salons[s.name];
     if (!firstRev || !lastRev) return;
@@ -814,13 +822,14 @@ function renderBlogCount() {
   var sortedDates = allDates.slice().reverse();
 
   // Get latest blog counts
+  var blogTargets = filteredAllSalons();
   var hasAny = false;
   var latestBlogs = {};
   var blogSeries = {};
-  ALL_SALONS.forEach(function(s) { blogSeries[s.name] = []; });
+  blogTargets.forEach(function(s) { blogSeries[s.name] = []; });
 
   sortedDates.forEach(function(d) {
-    ALL_SALONS.forEach(function(s) {
+    blogTargets.forEach(function(s) {
       var rv = cache[d] && cache[d].reviews && cache[d].reviews.salons && cache[d].reviews.salons[s.name];
       var bc = rv && rv.blogCount !== undefined ? rv.blogCount : null;
       blogSeries[s.name].push(bc);
@@ -838,9 +847,9 @@ function renderBlogCount() {
   h += '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:12px">';
 
   // Find max for bar width calculation
-  var maxBlog = Math.max.apply(null, ALL_SALONS.map(function(s) { return latestBlogs[s.name] || 0; })) || 1;
+  var maxBlog = Math.max.apply(null, blogTargets.map(function(s) { return latestBlogs[s.name] || 0; })) || 1;
 
-  ALL_SALONS.forEach(function(s) {
+  blogTargets.forEach(function(s) {
     var count = latestBlogs[s.name] || 0;
     var pct = (count / maxBlog * 100).toFixed(0);
     var isMax = count === maxBlog && count > 0;
@@ -856,7 +865,7 @@ function renderBlogCount() {
   // Blog trend chart if we have multiple days of data
   if (sortedDates.length >= 2) {
     var hasBlogTrend = false;
-    ALL_SALONS.forEach(function(s) {
+    blogTargets.forEach(function(s) {
       var nonNull = blogSeries[s.name].filter(function(v) { return v !== null; });
       if (nonNull.length >= 2) hasBlogTrend = true;
     });
@@ -864,7 +873,7 @@ function renderBlogCount() {
       h += '<h3>ブログ数推移</h3>';
       h += '<div style="overflow-x:auto">' + buildLineChart(sortedDates, blogSeries, 700, 180, 45, '件') + '</div>';
       h += '<div style="display:flex;gap:16px;margin-top:4px;justify-content:center">';
-      ALL_SALONS.forEach(function(s) {
+      blogTargets.forEach(function(s) {
         h += '<span style="font-size:11px"><span style="display:inline-block;width:10px;height:10px;background:' + s.color + ';border-radius:2px;vertical-align:middle;margin-right:3px"></span>' + s.label + '</span>';
       });
       h += '</div>';
@@ -879,8 +888,9 @@ function renderBlogCount() {
 function renderReviewTimeline(entry) {
   if (!entry.reviews) return '';
 
+  var tlTargets = filteredAllSalons();
   var hasAny = false;
-  ALL_SALONS.forEach(function(s) {
+  tlTargets.forEach(function(s) {
     var r = entry.reviews.salons && entry.reviews.salons[s.name];
     if (r && r.recentPostDates && r.recentPostDates.length > 0) hasAny = true;
   });
@@ -890,7 +900,7 @@ function renderReviewTimeline(entry) {
   var h = '<div class="card"><h2>口コミ投稿タイムライン</h2>';
   h += '<p style="font-size:11px;color:var(--gray);margin-bottom:8px">最新の口コミ投稿日。投稿間隔から来店頻度を推定</p>';
 
-  ALL_SALONS.forEach(function(s) {
+  tlTargets.forEach(function(s) {
     var r = entry.reviews.salons && entry.reviews.salons[s.name];
     if (!r || !r.recentPostDates || r.recentPostDates.length === 0) return;
 
