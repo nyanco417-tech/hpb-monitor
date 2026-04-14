@@ -2,8 +2,10 @@ name: HPB空き状況モニター
 
 on:
   schedule:
-    # 毎日JST 6:00 = UTC 21:00（前日）
+    # 毎日JST 6:00 = UTC 21:00（前日）- 保険用（未発火あり）
     - cron: '0 21 * * *'
+  repository_dispatch:
+    types: [daily-scrape]
   workflow_dispatch: # 手動実行も可能
 
 permissions:
