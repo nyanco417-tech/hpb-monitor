@@ -2,7 +2,7 @@
   "date": "2026-06-30",
   "salons": {
     "fullmoon": {
-      "reviewCount": 243,
+      "reviewCount": 244,
       "rating": 4.92,
       "recentPostDates": [],
       "blogCount": 380
@@ -11,7 +11,7 @@
       "reviewCount": 303,
       "rating": 4.84,
       "recentPostDates": [],
-      "blogCount": 246
+      "blogCount": 247
     },
     "lastella": {
       "reviewCount": 220,
@@ -47,7 +47,7 @@
       "reviewCount": 73,
       "rating": 4.97,
       "recentPostDates": [],
-      "blogCount": 121
+      "blogCount": 122
     },
     "andcharm": {
       "reviewCount": 86,
@@ -56,8 +56,8 @@
       "blogCount": 416
     },
     "bloom": {
-      "reviewCount": 0,
-      "rating": 0,
+      "reviewCount": 53,
+      "rating": 4.82,
       "recentPostDates": [],
       "blogCount": 346
     },
