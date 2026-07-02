@@ -2,13 +2,13 @@
   "date": "2026-07-02",
   "salons": {
     "fullmoon": {
-      "reviewCount": 244,
+      "reviewCount": 245,
       "rating": 4.92,
       "recentPostDates": [],
       "blogCount": 380
     },
     "flower": {
-      "reviewCount": 303,
+      "reviewCount": 304,
       "rating": 4.85,
       "recentPostDates": [],
       "blogCount": 248
@@ -17,7 +17,7 @@
       "reviewCount": 220,
       "rating": 4.95,
       "recentPostDates": [],
-      "blogCount": 104
+      "blogCount": 105
     },
     "sisu": {
       "reviewCount": 210,
@@ -32,16 +32,16 @@
       "blogCount": 25
     },
     "renecolor": {
-      "reviewCount": 58,
+      "reviewCount": 59,
       "rating": 4.88,
       "recentPostDates": [],
-      "blogCount": 532
+      "blogCount": 533
     },
     "hiyori": {
       "reviewCount": 48,
       "rating": 4.94,
       "recentPostDates": [],
-      "blogCount": 147
+      "blogCount": 148
     },
     "stylrelier": {
       "reviewCount": 73,
@@ -53,7 +53,7 @@
       "reviewCount": 86,
       "rating": 4.94,
       "recentPostDates": [],
-      "blogCount": 417
+      "blogCount": 418
     },
     "bloom": {
       "reviewCount": 53,
