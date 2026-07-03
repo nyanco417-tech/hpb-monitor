@@ -2,10 +2,10 @@
   "date": "2026-07-03",
   "salons": {
     "fullmoon": {
-      "reviewCount": 245,
+      "reviewCount": 246,
       "rating": 4.92,
       "recentPostDates": [],
-      "blogCount": 381
+      "blogCount": 382
     },
     "flower": {
       "reviewCount": 304,
@@ -41,7 +41,7 @@
       "reviewCount": 48,
       "rating": 4.94,
       "recentPostDates": [],
-      "blogCount": 148
+      "blogCount": 149
     },
     "stylrelier": {
       "reviewCount": 72,
