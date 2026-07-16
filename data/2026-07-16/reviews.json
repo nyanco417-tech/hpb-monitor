@@ -2,7 +2,7 @@
   "date": "2026-07-16",
   "salons": {
     "fullmoon": {
-      "reviewCount": 254,
+      "reviewCount": 255,
       "rating": 4.92,
       "recentPostDates": [],
       "blogCount": 384
@@ -20,7 +20,7 @@
       "blogCount": 106
     },
     "sisu": {
-      "reviewCount": 211,
+      "reviewCount": 212,
       "rating": 4.96,
       "recentPostDates": [],
       "blogCount": 533
@@ -47,7 +47,7 @@
       "reviewCount": 72,
       "rating": 4.97,
       "recentPostDates": [],
-      "blogCount": 135
+      "blogCount": 136
     },
     "andcharm": {
       "reviewCount": 84,
@@ -71,7 +71,7 @@
       "reviewCount": 26,
       "rating": 5,
       "recentPostDates": [],
-      "blogCount": 40
+      "blogCount": 41
     }
   }
 }
