@@ -2,16 +2,16 @@
   "date": "2026-08-04",
   "salons": {
     "fullmoon": {
-      "reviewCount": 264,
+      "reviewCount": 266,
       "rating": 4.92,
       "recentPostDates": [],
       "blogCount": 394
     },
     "flower": {
-      "reviewCount": 311,
+      "reviewCount": 312,
       "rating": 4.88,
       "recentPostDates": [],
-      "blogCount": 270
+      "blogCount": 271
     },
     "lastella": {
       "reviewCount": 229,
@@ -23,10 +23,10 @@
       "reviewCount": 219,
       "rating": 4.96,
       "recentPostDates": [],
-      "blogCount": 543
+      "blogCount": 545
     },
     "cocoparis": {
-      "reviewCount": 82,
+      "reviewCount": 83,
       "rating": 4.95,
       "recentPostDates": [],
       "blogCount": 25
@@ -47,19 +47,19 @@
       "reviewCount": 73,
       "rating": 4.97,
       "recentPostDates": [],
-      "blogCount": 153
+      "blogCount": 154
     },
     "andcharm": {
       "reviewCount": 87,
       "rating": 4.92,
       "recentPostDates": [],
-      "blogCount": 428
+      "blogCount": 430
     },
     "bloom": {
       "reviewCount": 51,
       "rating": 4.82,
       "recentPostDates": [],
-      "blogCount": 347
+      "blogCount": 349
     },
     "pulip": {
       "reviewCount": 14,
@@ -71,7 +71,7 @@
       "reviewCount": 26,
       "rating": 5,
       "recentPostDates": [],
-      "blogCount": 44
+      "blogCount": 45
     }
   }
 }
