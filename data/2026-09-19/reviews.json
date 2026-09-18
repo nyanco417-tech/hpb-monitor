@@ -1,0 +1,77 @@
+{
+  "date": "2026-09-19",
+  "salons": {
+    "fullmoon": {
+      "reviewCount": 284,
+      "rating": 4.9,
+      "recentPostDates": [],
+      "blogCount": 411
+    },
+    "flower": {
+      "reviewCount": 318,
+      "rating": 4.9,
+      "recentPostDates": [],
+      "blogCount": 311
+    },
+    "lastella": {
+      "reviewCount": 237,
+      "rating": 4.95,
+      "recentPostDates": [],
+      "blogCount": 129
+    },
+    "sisu": {
+      "reviewCount": 233,
+      "rating": 4.96,
+      "recentPostDates": [],
+      "blogCount": 565
+    },
+    "cocoparis": {
+      "reviewCount": 87,
+      "rating": 4.95,
+      "recentPostDates": [],
+      "blogCount": 25
+    },
+    "renecolor": {
+      "reviewCount": 61,
+      "rating": 4.84,
+      "recentPostDates": [],
+      "blogCount": 567
+    },
+    "hiyori": {
+      "reviewCount": 45,
+      "rating": 4.93,
+      "recentPostDates": [],
+      "blogCount": 0
+    },
+    "stylrelier": {
+      "reviewCount": 69,
+      "rating": 4.97,
+      "recentPostDates": [],
+      "blogCount": 192
+    },
+    "andcharm": {
+      "reviewCount": 87,
+      "rating": 4.9,
+      "recentPostDates": [],
+      "blogCount": 457
+    },
+    "bloom": {
+      "reviewCount": 39,
+      "rating": 4.75,
+      "recentPostDates": [],
+      "blogCount": 366
+    },
+    "pulip": {
+      "reviewCount": 14,
+      "rating": 4.64,
+      "recentPostDates": [],
+      "blogCount": 16
+    },
+    "toiettoi": {
+      "reviewCount": 28,
+      "rating": 5,
+      "recentPostDates": [],
+      "blogCount": 54
+    }
+  }
+}
