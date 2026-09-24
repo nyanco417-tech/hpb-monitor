@@ -2,7 +2,7 @@
   "date": "2026-09-24",
   "salons": {
     "fullmoon": {
-      "reviewCount": 289,
+      "reviewCount": 290,
       "rating": 4.9,
       "recentPostDates": [],
       "blogCount": 411
@@ -11,7 +11,7 @@
       "reviewCount": 318,
       "rating": 4.92,
       "recentPostDates": [],
-      "blogCount": 315
+      "blogCount": 316
     },
     "lastella": {
       "reviewCount": 240,
@@ -20,7 +20,7 @@
       "blogCount": 131
     },
     "sisu": {
-      "reviewCount": 234,
+      "reviewCount": 235,
       "rating": 4.96,
       "recentPostDates": [],
       "blogCount": 568
@@ -59,7 +59,7 @@
       "reviewCount": 38,
       "rating": 4.75,
       "recentPostDates": [],
-      "blogCount": 372
+      "blogCount": 373
     },
     "pulip": {
       "reviewCount": 14,
