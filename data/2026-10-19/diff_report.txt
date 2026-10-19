@@ -286,7 +286,7 @@
 
 [本日の口コミ数]
   Full Moon            304件  (4.9点)
-  Flower Factories     316件  (4.92点)
+  Flower Factories     317件  (4.92点)
   La.stella            244件  (4.95点)
   studio SISU          242件  (4.96点)
   coco paris.          92件  (4.92点)
@@ -300,7 +300,7 @@
 
 [前日比（2026-10-18→2026-10-19）]
   Full Moon            302→304件 (+2)
-  Flower Factories     313→316件 (+3)
+  Flower Factories     313→317件 (+4)
   La.stella            244→244件 (0)
   studio SISU          242→242件 (0)
   coco paris.          92→92件 (0)
