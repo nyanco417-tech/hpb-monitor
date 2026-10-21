@@ -2,10 +2,10 @@
   "date": "2026-10-22",
   "salons": {
     "fullmoon": {
-      "reviewCount": 304,
-      "rating": 4.9,
+      "reviewCount": 0,
+      "rating": 0,
       "recentPostDates": [],
-      "blogCount": 424
+      "blogCount": 0
     },
     "flower": {
       "reviewCount": 316,
