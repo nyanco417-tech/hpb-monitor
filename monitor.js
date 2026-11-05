@@ -43,18 +43,6 @@ const SALONS = [
     couponId: 'CP00000010737154',
   },
   {
-    name: 'renecolor',
-    label: 'Renecolor',
-    storeId: 'H000618778',
-    couponId: 'CP00000009508647',
-  },
-  {
-    name: 'hiyori',
-    label: 'ひよりスタイリング',
-    storeId: 'H000645379',
-    couponId: 'CP00000008800897',
-  },
-  {
     name: 'lilou_jingu',
     label: 'LILOU COLOR 明治神宮前',
     storeId: 'H000821342',
