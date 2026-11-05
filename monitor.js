@@ -54,36 +54,29 @@ const SALONS = [
     storeId: 'H000645379',
     couponId: 'CP00000008800897',
   },
+  {
+    name: 'lilou_jingu',
+    label: 'LILOU COLOR 明治神宮前',
+    storeId: 'H000821342',
+    couponId: 'CP00000013055733',
+  },
+  {
+    name: 'lilou_ikebukuro',
+    label: 'LILOU COLOR 池袋',
+    storeId: 'H000749367',
+    couponId: 'CP00000011038873',
+  },
+  {
+    name: 'cherie',
+    label: 'Salon de Cherie 銀座',
+    storeId: 'H000813451',
+    couponId: 'CP00000012811189',
+  },
 ];
 
 // 口コミ・ブログのみ追跡（予約カレンダーはスクレイプしない）
-const REVIEW_ONLY_SALONS = [
-  {
-    name: 'stylrelier',
-    label: 'styleRELIER',
-    storeId: 'H000694796',
-  },
-  {
-    name: 'andcharm',
-    label: '&charm',
-    storeId: 'H000635977',
-  },
-  {
-    name: 'bloom',
-    label: 'Bloom.',
-    storeId: 'H000710177',
-  },
-  {
-    name: 'pulip',
-    label: 'Pulip',
-    storeId: 'H000766773',
-  },
-  {
-    name: 'toiettoi',
-    label: 'Toi et Toi',
-    storeId: 'H000791050',
-  },
-];
+// 2026-11-05: styleRELIER / &charm / Bloom. / Pulip / Toi et Toi は追跡終了
+const REVIEW_ONLY_SALONS = [];
 
 // 全サロン（口コミ・ブログ取得用）
 const ALL_SALONS = [...SALONS, ...REVIEW_ONLY_SALONS];
@@ -359,37 +352,63 @@ async function processSalon(browser, salon, outputDir) {
 
     const weeksForSalon = salon.name === 'fullmoon' ? 11 : WEEKS_TO_ADVANCE;
     for (let w = 1; w <= weeksForSalon; w++) {
-      const nextLink = page.locator('a.arrowPagingWeekR.jscCalNavi');
-      const nextExists = await nextLink.count();
-      if (nextExists === 0) {
-        console.log(`  [WARN] 「次の一週間」リンクが見つかりません（week ${w}）`);
+      try {
+        const nextLink = page.locator('a.arrowPagingWeekR.jscCalNavi');
+        const nextExists = await nextLink.count();
+        if (nextExists === 0) {
+          console.log(`  [WARN] 「次の一週間」リンクが見つかりません（week ${w}）`);
+          break;
+        }
+        const href = await nextLink.getAttribute('href');
+        const nextUrl = href.startsWith('http') ? href : `https://beauty.hotpepper.jp${href}`;
+        console.log(`  次の一週間へ (week ${w})...`);
+        await sleep(2000);
+        await gotoWithRetry(page, nextUrl, { waitUntil: 'networkidle', timeout: 30000 });
+        await page.waitForSelector('#jsRsvCdTbl', { timeout: 10000 });
+        const dataW = await captureCalendar(page, salon, outputDir, w);
+        if (dataW) mergeSlots(mergedSlots, dataW.slots);
+      } catch (weekErr) {
+        console.error(`  [ERROR] ${salon.label} week${w}でエラー: ${weekErr.message}`);
+        console.log(`  week0-${w - 1}までの取得済みデータは保存します`);
+        const errFile = path.join(outputDir, `${salon.name}_error.png`);
+        await page.screenshot({ path: errFile, fullPage: true }).catch(() => {});
         break;
       }
-      const href = await nextLink.getAttribute('href');
-      const nextUrl = href.startsWith('http') ? href : `https://beauty.hotpepper.jp${href}`;
-      console.log(`  次の一週間へ (week ${w})...`);
-      await sleep(2000);
-      await gotoWithRetry(page, nextUrl, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('#jsRsvCdTbl', { timeout: 10000 });
-      const dataW = await captureCalendar(page, salon, outputDir, w);
-      if (dataW) mergeSlots(mergedSlots, dataW.slots);
     }
 
-    // データ健全性チェック
-    const integrity = validateSalonData(salon, mergedSlots, outputDir);
-    const jsonData = {
-      salon: salon.name,
-      capturedAt: getDateStr(),
-      slots: mergedSlots,
-      integrity,
-    };
-    const jsonPath = path.join(outputDir, `${salon.name}_data.json`);
-    fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2), 'utf-8');
-    console.log(`  データ保存: ${salon.name}_data.json (${Object.keys(mergedSlots).length}日分, 健全性: ${integrity.status})`);
+    // 取得済みデータがあれば部分データでも保存する
+    if (Object.keys(mergedSlots).length > 0) {
+      const integrity = validateSalonData(salon, mergedSlots, outputDir);
+      const jsonData = {
+        salon: salon.name,
+        capturedAt: getDateStr(),
+        slots: mergedSlots,
+        integrity,
+      };
+      const jsonPath = path.join(outputDir, `${salon.name}_data.json`);
+      fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2), 'utf-8');
+      console.log(`  データ保存: ${salon.name}_data.json (${Object.keys(mergedSlots).length}日分, 健全性: ${integrity.status})`);
+    } else {
+      console.log(`  [WARN] ${salon.label}: 取得データなし、JSONファイル未生成`);
+    }
   } catch (err) {
     console.error(`  [ERROR] ${salon.label}: ${err.message}`);
     const errFile = path.join(outputDir, `${salon.name}_error.png`);
     await page.screenshot({ path: errFile, fullPage: true }).catch(() => {});
+    // 外側のcatchでも部分データがあれば保存する
+    if (Object.keys(mergedSlots).length > 0) {
+      const integrity = validateSalonData(salon, mergedSlots, outputDir);
+      const jsonData = {
+        salon: salon.name,
+        capturedAt: getDateStr(),
+        slots: mergedSlots,
+        integrity,
+        partialError: err.message,
+      };
+      const jsonPath = path.join(outputDir, `${salon.name}_data.json`);
+      fs.writeFileSync(jsonPath, JSON.stringify(jsonData, null, 2), 'utf-8');
+      console.log(`  部分データ保存: ${salon.name}_data.json (${Object.keys(mergedSlots).length}日分)`);
+    }
   } finally {
     await page.close();
   }
@@ -1043,16 +1062,39 @@ async function main() {
   // 1回目のスクレイプ実行
   await runScrape(dateStr, outputDir);
 
-  // 全サロンのカレンダーデータが取得できなかった場合、60秒待ってリトライ
-  if (!hasAnyCalendarData(outputDir)) {
+  // 失敗したサロンを検出してリトライ
+  const failedSalons = SALONS.filter(s => {
+    const jsonPath = path.join(outputDir, `${s.name}_data.json`);
+    return !fs.existsSync(jsonPath);
+  });
+
+  if (failedSalons.length === SALONS.length) {
+    // 全サロン失敗: 60秒待って全体リトライ
     console.log(`\n[RETRY] カレンダーデータが全サロン取得失敗。60秒後に全体リトライします...`);
     await sleep(60000);
-    // エラースクリーンショットを削除して再取得
     for (const salon of SALONS) {
       const errFile = path.join(outputDir, `${salon.name}_error.png`);
       if (fs.existsSync(errFile)) fs.unlinkSync(errFile);
     }
     await runScrape(dateStr, outputDir);
+  } else if (failedSalons.length > 0) {
+    // 一部サロン失敗: 30秒待って個別リトライ
+    console.log(`\n[RETRY] ${failedSalons.length}サロン失敗 (${failedSalons.map(s => s.label).join(', ')})。30秒後に個別リトライします...`);
+    await sleep(30000);
+    const browser = await chromium.launch({ headless: true });
+    try {
+      for (let i = 0; i < failedSalons.length; i++) {
+        const salon = failedSalons[i];
+        // エラースクリーンショットを削除して再取得
+        const errFile = path.join(outputDir, `${salon.name}_error.png`);
+        if (fs.existsSync(errFile)) fs.unlinkSync(errFile);
+        if (i > 0) await sleep(3000);
+        console.log(`\n[RETRY] ${salon.label} を再取得...`);
+        await processSalon(browser, salon, outputDir);
+      }
+    } finally {
+      await browser.close();
+    }
   }
 
   const { text, html, hasPrev } = generateDiffReport(outputDir, dateStr);
