@@ -268,7 +268,7 @@ function render() {
     html += renderTrendChart();
     html += renderReviewPace();
     html += renderBlogCount();
-    html += renderReviewTimeline(entry);
+    // 口コミ投稿タイムラインは非表示（2026-11-05 ユーザー指示）
   }
 
   if (curView === 'all' || curView === 'calendar') {
