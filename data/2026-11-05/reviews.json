@@ -11,7 +11,7 @@
       "reviewCount": 318,
       "rating": 4.92,
       "recentPostDates": [],
-      "blogCount": 353
+      "blogCount": 354
     },
     "lastella": {
       "reviewCount": 248,
@@ -43,35 +43,23 @@
       "recentPostDates": [],
       "blogCount": 0
     },
-    "stylrelier": {
-      "reviewCount": 64,
-      "rating": 4.97,
+    "lilou_jingu": {
+      "reviewCount": 25,
+      "rating": 4.92,
       "recentPostDates": [],
-      "blogCount": 232
+      "blogCount": 19
     },
-    "andcharm": {
-      "reviewCount": 84,
-      "rating": 4.89,
+    "lilou_ikebukuro": {
+      "reviewCount": 91,
+      "rating": 4.76,
       "recentPostDates": [],
-      "blogCount": 475
+      "blogCount": 20
     },
-    "bloom": {
-      "reviewCount": 37,
-      "rating": 4.75,
+    "cherie": {
+      "reviewCount": 174,
+      "rating": 4.95,
       "recentPostDates": [],
-      "blogCount": 379
-    },
-    "pulip": {
-      "reviewCount": 14,
-      "rating": 4.55,
-      "recentPostDates": [],
-      "blogCount": 16
-    },
-    "toiettoi": {
-      "reviewCount": 33,
-      "rating": 5,
-      "recentPostDates": [],
-      "blogCount": 58
+      "blogCount": 7
     }
   }
 }
