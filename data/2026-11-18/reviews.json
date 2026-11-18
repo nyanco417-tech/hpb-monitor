@@ -1,0 +1,53 @@
+{
+  "date": "2026-11-18",
+  "salons": {
+    "fullmoon": {
+      "reviewCount": 315,
+      "rating": 4.89,
+      "recentPostDates": [],
+      "blogCount": 465
+    },
+    "flower": {
+      "reviewCount": 319,
+      "rating": 4.91,
+      "recentPostDates": [],
+      "blogCount": 364
+    },
+    "lastella": {
+      "reviewCount": 250,
+      "rating": 4.94,
+      "recentPostDates": [],
+      "blogCount": 143
+    },
+    "sisu": {
+      "reviewCount": 247,
+      "rating": 4.95,
+      "recentPostDates": [],
+      "blogCount": 591
+    },
+    "cocoparis": {
+      "reviewCount": 97,
+      "rating": 4.93,
+      "recentPostDates": [],
+      "blogCount": 26
+    },
+    "lilou_jingu": {
+      "reviewCount": 33,
+      "rating": 4.94,
+      "recentPostDates": [],
+      "blogCount": 19
+    },
+    "lilou_ikebukuro": {
+      "reviewCount": 93,
+      "rating": 4.73,
+      "recentPostDates": [],
+      "blogCount": 20
+    },
+    "cherie": {
+      "reviewCount": 183,
+      "rating": 4.95,
+      "recentPostDates": [],
+      "blogCount": 7
+    }
+  }
+}
